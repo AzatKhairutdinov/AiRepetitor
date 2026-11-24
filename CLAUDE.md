@@ -15,3 +15,7 @@ Single-context: one `GLOSSARY.md` + `docs/adr/` at the repo root. See `docs/agen
 - When a check fails, fix the code. Ask a human before disabling a lint rule or loosening a check.
 - Scaffold with Nx generators: `pnpm nx g @airepetitor/workspace-plugin:<endpoint|app-api|app-web>`.
 - API handlers in `apps/api/src/handlers/` are hand-written; routes, validators and the client are generated.
+
+## Git workflow
+
+Work on a branch `<type>/<short-kebab>` and open a pull request; never push to `main`. See `.claude/rules/git-workflow.md`.

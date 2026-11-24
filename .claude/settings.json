@@ -13,6 +13,15 @@
             "command": "jq -r '.tool_input.file_path' | grep -q '/libs/contract/' && { echo 'libs/contract is generated. Edit specs/*.tsp and run: mise run generate' >&2; exit 2; } || exit 0"
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.command' | grep -E -q '(^|&&|;|\\|\\|)[[:space:]]*git push[^|;&]*(--force|[[:space:]]-f([[:space:]]|$)|[[:space:]:/](main|master)([[:space:]]|$))' && { echo 'Never push to main or force-push. Push a feature branch and open a PR (see .claude/rules/git-workflow.md).' >&2; exit 2; } || exit 0"
+          }
+        ]
       }
     ],
     "Stop": [

@@ -8,8 +8,12 @@ rumdl = "0.3.5"
 typos = "1.52.2"
 lychee = "0.24.2"
 actionlint = "1.7.12"
-rust = "1.100.0"
-"cargo:agnix-cli" = "0.61.0"
+rust = { version = "1.100.0", os = ["macos"] }
+# agnix: no Intel-macOS build, so compile on macOS; use the prebuilt binary on Linux/CI (saves ~5 min cold).
+"cargo:agnix-cli" = { version = "0.61.0", os = ["macos"] }
+"github:agent-sh/agnix" = { version = "0.61.0", os = [
+  "linux",
+], asset_pattern = "agnix-x86_64-unknown-linux-gnu.tar.gz" }
 
 [tasks.setup]
 description = "Install dependencies and git hooks"
