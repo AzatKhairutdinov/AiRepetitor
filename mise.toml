@@ -40,6 +40,7 @@ description = "Everything CI runs"
 depends = ["check:fast"]
 run = [
   "pnpm exec tsc -b",
+  "pnpm exec tsc -p apps/api",
   "pnpm exec tsc -p apps/web",
   "pnpm nx run-many -t build",
   "pnpm exec knip",
@@ -60,3 +61,30 @@ run = "pnpm nx run contract:generate"
 [tasks.security]
 description = "Scan dependencies for known vulnerabilities (OSV)"
 run = "osv-scanner scan source -L pnpm-lock.yaml"
+
+# --- Local development -------------------------------------------------------
+[tasks."dev:setup"]
+description = "Create local env file and apply local D1 migrations (idempotent)"
+run = "bash scripts/dev-setup.sh"
+
+[tasks.dev]
+description = "Run the API (:8787) and web app (:5173) with hot reload"
+depends = ["dev:setup"]
+run = "pnpm nx run-many -t dev --parallel=2"
+
+[tasks."db:generate"]
+description = "Generate a SQL migration from apps/api/src/db/schema.ts"
+run = "pnpm --filter @airepetitor/api exec drizzle-kit generate"
+
+[tasks."db:migrate"]
+description = "Apply migrations to the local D1 database"
+run = "pnpm --filter @airepetitor/api exec wrangler d1 migrations apply DB --local"
+
+[tasks."db:reset"]
+description = "Delete the local D1 state and re-apply migrations"
+run = ["rm -rf apps/api/.wrangler/state", "mise run db:migrate"]
+
+[tasks."db:auth-schema"]
+description = "Regenerate Better Auth tables (then run db:generate)"
+dir = "apps/api"
+run = "pnpm dlx auth@1.7.27 generate --config src/auth.cli.ts --output src/db/auth-schema.ts -y"

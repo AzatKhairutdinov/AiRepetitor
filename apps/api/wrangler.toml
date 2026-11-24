@@ -1,3 +1,11 @@
 name = "airepetitor-api"
 main = "src/index.ts"
 compatibility_date = "2026-11-01"
+compatibility_flags = ["nodejs_compat"] # Better Auth uses AsyncLocalStorage
+
+# Local development database. The production database id is added at production setup.
+[[d1_databases]]
+binding = "DB"
+database_name = "airepetitor"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"

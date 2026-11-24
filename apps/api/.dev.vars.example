@@ -1,0 +1,4 @@
+# Copy to .dev.vars (mise run dev:setup does this and generates a secret). .dev.vars is gitignored.
+BETTER_AUTH_SECRET=replace-with-openssl-rand-base64-32
+# The browser origin (the Vite dev server proxies /api to the Worker on :8787)
+BETTER_AUTH_URL=http://localhost:5173
