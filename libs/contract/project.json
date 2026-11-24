@@ -1,0 +1,17 @@
+{
+  "name": "contract",
+  "targets": {
+    "generate": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "pnpm exec tsp compile specs --output-dir libs/contract/openapi",
+          "pnpm exec orval --config libs/contract/orval.config.ts"
+        ],
+        "parallel": false,
+        "cwd": "{workspaceRoot}"
+      },
+      "cache": false
+    }
+  }
+}

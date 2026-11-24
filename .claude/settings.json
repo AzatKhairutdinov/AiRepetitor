@@ -1,0 +1,29 @@
+{
+  "enabledPlugins": {
+    "mattpocock-skills@claude-plugins-official": true
+  },
+  "enabledMcpjsonServers": ["context7"],
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path' | grep -q '/libs/contract/' && { echo 'libs/contract is generated. Edit specs/*.tsp and run: mise run generate' >&2; exit 2; } || exit 0"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -e '.stop_hook_active == true' >/dev/null && exit 0; mise run check >&2 || { echo 'mise run check failed: fix before finishing' >&2; exit 2; }"
+          }
+        ]
+      }
+    ]
+  }
+}

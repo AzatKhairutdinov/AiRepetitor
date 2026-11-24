@@ -1,0 +1,11 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignore": ["libs/contract/**"],
+  "ignoreDependencies": [
+    "hono",
+    "zod",
+    "@hono/zod-validator",
+    "@typespec/http",
+    "@typespec/openapi3"
+  ]
+}

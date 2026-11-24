@@ -1,0 +1,14 @@
+node_modules/
+.nx/
+dist/
+coverage/
+.wrangler/
+.dev.vars
+.env
+.env.*
+!.env.example
+.lycheecache
+.DS_Store
+*.log
+.claude/settings.local.json
+tsconfig.tsbuildinfo

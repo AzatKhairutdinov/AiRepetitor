@@ -1,0 +1,45 @@
+# One toolchain for developers, git hooks and CI.
+min_version = "2026.10.9"
+
+[tools]
+node = "26"
+pnpm = "12.23.0"
+rumdl = "0.3.5"
+typos = "1.52.2"
+lychee = "0.24.2"
+actionlint = "1.7.12"
+
+[tasks.setup]
+description = "Install dependencies and git hooks"
+run = ["pnpm install --frozen-lockfile", "git config core.hooksPath .githooks"]
+
+# Tier 1: fast, runs on pre-commit (no network)
+[tasks."check:fast"]
+description = "Fast checks (pre-commit)"
+run = [
+  "rumdl check .",
+  "typos",
+  "actionlint",
+  "pnpm exec oxlint --no-error-on-unmatched-pattern .",
+  "pnpm exec oxfmt --check .",
+]
+
+# Tier 2/3: full set, runs on pre-push and in CI
+[tasks.check]
+description = "Everything CI runs"
+depends = ["check:fast"]
+run = [
+  "pnpm exec tsc -b",
+  "pnpm exec knip",
+  "pnpm exec vitest run --passWithNoTests",
+  "bash scripts/gen-check.sh",
+  "lychee --config lychee.toml --no-progress '**/*.md'",
+]
+
+[tasks.fix]
+description = "Apply autofixes"
+run = ["rumdl check --fix .", "typos -w", "pnpm exec oxlint --fix .", "pnpm exec oxfmt ."]
+
+[tasks.generate]
+description = "Regenerate contract code from TypeSpec"
+run = "pnpm nx run contract:generate"
