@@ -19,3 +19,10 @@ Single-context: one `GLOSSARY.md` + `docs/adr/` at the repo root. See `docs/agen
 ## Git workflow
 
 Work on a branch `<type>/<short-kebab>` and open a pull request; never push to `main`. See `.claude/rules/git-workflow.md`.
+
+## Security
+
+- `mise run check` scans git history for secrets (Betterleaks). Keep secrets in `.dev.vars` or Wrangler secrets, never in tracked files.
+- `mise run security` scans `pnpm-lock.yaml` for known vulnerabilities (OSV). It runs weekly and on lockfile changes in CI.
+- Fix a vulnerable dependency by upgrading it or with a pnpm `overrides` entry. Ask a human before ignoring an advisory.
+- Code is licensed PolyForm Noncommercial 1.0.0; see `LICENSE`.

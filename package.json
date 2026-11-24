@@ -1,6 +1,7 @@
 {
   "name": "ai-repetitor",
   "private": true,
+  "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",
   "scripts": {
     "typecheck": "tsc -b"
