@@ -1,0 +1,14 @@
+name: Feature
+description: Propose a change or addition
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: why
+    attributes:
+      label: Problem or goal
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: What does done look like?
