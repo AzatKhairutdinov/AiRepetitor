@@ -1,0 +1,7 @@
+{
+  "name": "web",
+  "targets": {
+    "dev": { "command": "vite", "options": { "cwd": "apps/web" } },
+    "build": { "command": "vite build", "options": { "cwd": "apps/web" } }
+  }
+}

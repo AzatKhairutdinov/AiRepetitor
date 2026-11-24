@@ -6,7 +6,7 @@
  */
 import type {
   Health
-} from './aiRepetitorAPI.schemas.ts';
+} from './api.schemas.ts';
 
 
 export type healthResponse200 = {

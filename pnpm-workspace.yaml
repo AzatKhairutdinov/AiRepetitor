@@ -1,6 +1,7 @@
 packages:
   - apps/*
   - libs/*
+  - tools/*
 minimumReleaseAgeExclude:
   - "@oxfmt/binding-android-arm-eabi@0.80.0"
   - "@oxfmt/binding-android-arm64@0.80.0"
@@ -45,3 +46,4 @@ minimumReleaseAgeExclude:
 allowBuilds:
   esbuild: true
   nx: true
+  workerd: true

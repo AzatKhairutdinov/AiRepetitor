@@ -13,3 +13,5 @@ Single-context: one `GLOSSARY.md` + `docs/adr/` at the repo root. See `docs/agen
 - One check command: `mise run check`. Fix with `mise run fix`. Regenerate contract code with `mise run generate`.
 - `libs/contract/**` is generated from `specs/*.tsp`; never hand-edit. See `.claude/rules/`.
 - When a check fails, fix the code. Ask a human before disabling a lint rule or loosening a check.
+- Scaffold with Nx generators: `pnpm nx g @airepetitor/workspace-plugin:<endpoint|app-api|app-web>`.
+- API handlers in `apps/api/src/handlers/` are hand-written; routes, validators and the client are generated.

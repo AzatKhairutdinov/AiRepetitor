@@ -33,6 +33,8 @@ description = "Everything CI runs"
 depends = ["check:fast"]
 run = [
   "pnpm exec tsc -b",
+  "pnpm exec tsc -p apps/web",
+  "pnpm nx run-many -t build",
   "pnpm exec knip",
   "pnpm exec vitest run --passWithNoTests",
   "bash scripts/gen-check.sh",

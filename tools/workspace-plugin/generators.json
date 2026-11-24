@@ -1,0 +1,19 @@
+{
+  "generators": {
+    "endpoint": {
+      "factory": "./src/endpoint/generator.ts",
+      "schema": "./src/endpoint/schema.json",
+      "description": "Add an API operation to specs/main.tsp and regenerate the contract"
+    },
+    "app-api": {
+      "factory": "./src/app-api/generator.ts",
+      "schema": "./src/app-api/schema.json",
+      "description": "Scaffold a Hono API app for Cloudflare Workers"
+    },
+    "app-web": {
+      "factory": "./src/app-web/generator.ts",
+      "schema": "./src/app-web/schema.json",
+      "description": "Scaffold a React + Vite web app"
+    }
+  }
+}

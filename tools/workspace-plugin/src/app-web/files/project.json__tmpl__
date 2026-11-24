@@ -1,0 +1,7 @@
+{
+  "name": "<%= name %>",
+  "targets": {
+    "dev": { "command": "vite", "options": { "cwd": "apps/<%= name %>" } },
+    "build": { "command": "vite build", "options": { "cwd": "apps/<%= name %>" } }
+  }
+}

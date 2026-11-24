@@ -9,9 +9,7 @@ import {
 } from 'hono';
 
 
-import {
- healthHandlers
-} from './filename.handlers';
+import { healthHandlers } from '../../../../apps/api/src/handlers/health';
 
 const app = new Hono()
 

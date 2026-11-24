@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Operation id in camelCase, e.g. listLessons",
+      "$default": { "$source": "argv", "index": 0 }
+    },
+    "route": { "type": "string", "description": "HTTP path, e.g. /lessons" },
+    "method": { "type": "string", "enum": ["get", "post", "put", "delete"], "default": "get" }
+  },
+  "required": ["name", "route"]
+}

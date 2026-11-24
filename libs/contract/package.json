@@ -1,1 +1,15 @@
-{ "name": "@airepetitor/contract", "private": true, "type": "module", "version": "0.0.0" }
+{
+  "name": "@airepetitor/contract",
+  "private": true,
+  "type": "module",
+  "version": "0.0.0",
+  "exports": {
+    "./server": "./src/server/api.ts",
+    "./client": "./src/client/api.ts"
+  },
+  "dependencies": {
+    "@hono/zod-validator": "*",
+    "hono": "*",
+    "zod": "*"
+  }
+}

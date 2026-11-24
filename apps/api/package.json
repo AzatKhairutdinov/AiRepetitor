@@ -1,0 +1,10 @@
+{
+  "name": "@airepetitor/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@airepetitor/contract": "workspace:*",
+    "hono": "*"
+  }
+}

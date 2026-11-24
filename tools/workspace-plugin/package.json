@@ -1,0 +1,10 @@
+{
+  "name": "@airepetitor/workspace-plugin",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@nx/devkit": "*"
+  },
+  "generators": "./generators.json"
+}
