@@ -1,5 +1,10 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "ignore": ["libs/contract/**"],
-  "ignoreDependencies": ["@typespec/http", "@typespec/openapi3", "@airepetitor/workspace-plugin"]
+  "ignoreDependencies": ["@typespec/http", "@typespec/openapi3", "@airepetitor/workspace-plugin"],
+  "workspaces": {
+    "apps/api": {
+      "entry": ["src/auth.cli.ts"]
+    }
+  }
 }
