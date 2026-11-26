@@ -132,13 +132,33 @@ export interface Source {
   errorReason?: string;
 }
 
+export type TopicMark = typeof TopicMark[keyof typeof TopicMark];
+
+
+export const TopicMark = {
+  new: 'new',
+  extended: 'extended',
+} as const;
+
+/**
+ * A Topic this Material touched.
+ */
+export interface MaterialTopic {
+  id: string;
+  title: string;
+  mark: TopicMark;
+}
+
 export interface Material {
   id: string;
   profileId: string;
   title?: string;
   status: MaterialStatus;
   createdAt: string;
+  /** Russian reason for the Learner, set when status is failed. */
+  errorReason?: string;
   sources: Source[];
+  topics: MaterialTopic[];
 }
 
 /**
@@ -159,6 +179,25 @@ export interface SourceUpload {
 export interface CreatedMaterial {
   material: Material;
   uploads: SourceUpload[];
+}
+
+/**
+ * The latest Digest version; the Learner never sees older ones.
+ */
+export interface Digest {
+  version: number;
+  /** Markdown; `[[source:<sourceId>]]` marks a reference to a Source text. */
+  markdown: string;
+  createdAt: string;
+}
+
+/**
+ * A Source a Digest may cite.
+ */
+export interface DigestSource {
+  sourceId: string;
+  fileName: string;
+  materialId: string;
 }
 
 /**
@@ -232,6 +271,33 @@ export interface Profile {
 
 export interface ProfileList {
   items: Profile[];
+}
+
+export interface SourceText {
+  sourceId: string;
+  fileName: string;
+  materialId: string;
+  profileId: string;
+  markdown: string;
+}
+
+export interface Topic {
+  id: string;
+  title: string;
+  description: string;
+  profileId: string;
+  digest?: Digest;
+  sources: DigestSource[];
+}
+
+export interface TopicSummary {
+  id: string;
+  title: string;
+  description: string;
+}
+
+export interface TopicList {
+  items: TopicSummary[];
 }
 
 export interface UnauthorizedError {

@@ -12,10 +12,17 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: Object.fromEntries(
-      ["/health", "/api", "/languages", "/profiles", "/materials", "/storage", "/team"].map((p) => [
-        p,
-        api,
-      ]),
+      [
+        "/health",
+        "/api",
+        "/languages",
+        "/profiles",
+        "/materials",
+        "/storage",
+        "/team",
+        "/topics",
+        "/sources",
+      ].map((p) => [p, api]),
     ),
   },
 });

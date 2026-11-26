@@ -6,7 +6,9 @@ import { MaterialCard } from "./screens/MaterialCard.tsx";
 import { ProfileHome } from "./screens/ProfileHome.tsx";
 import { ProfileLayout } from "./screens/ProfileLayout.tsx";
 import { SignIn } from "./screens/SignIn.tsx";
+import { SourceTextView } from "./screens/SourceTextView.tsx";
 import { TeamFlows } from "./screens/TeamFlows.tsx";
+import { TopicDigest } from "./screens/TopicDigest.tsx";
 
 export function App() {
   const { data: session, isPending } = authClient.useSession();
@@ -22,6 +24,8 @@ export function App() {
       <Route path="/profiles/:profileId" element={<ProfileLayout />}>
         <Route index element={<ProfileHome />} />
         <Route path="materials/:materialId" element={<MaterialCard />} />
+        <Route path="topics/:topicId" element={<TopicDigest />} />
+        <Route path="sources/:sourceId" element={<SourceTextView />} />
       </Route>
     </Routes>
   );

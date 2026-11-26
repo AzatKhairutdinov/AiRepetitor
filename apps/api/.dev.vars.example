@@ -4,3 +4,7 @@ BETTER_AUTH_SECRET=replace-with-openssl-rand-base64-32
 BETTER_AUTH_URL=http://localhost:5173
 # Shared secret of the extraction worker (mise run dev:setup generates one)
 WORKER_TOKEN=replace-with-openssl-rand-base64-32
+# Model provider (optional locally; without it the Tutor is "unavailable")
+DEEPINFRA_API_KEY=
+# TUTOR_BASE_URL=https://api.deepinfra.com/v1/openai
+# TUTOR_MODEL=deepseek-ai/DeepSeek-V4.1-Flash

@@ -42,7 +42,22 @@ export type ProfileMaterialsCreateMaterialContext<E extends Env = any> = Context
  },json: CreateMaterialRequest, }, out: { param: {
  profileId: string,
  },json: CreateMaterialRequest, } }>
+export type ListTopicsContext<E extends Env = any> = Context<E, '/profiles/:profileId/topics', { in: { param: {
+ profileId: string,
+ }, }, out: { param: {
+ profileId: string,
+ }, } }>
+export type GetSourceTextContext<E extends Env = any> = Context<E, '/sources/:sourceId/text', { in: { param: {
+ sourceId: string,
+ }, }, out: { param: {
+ sourceId: string,
+ }, } }>
 export type TeamListFlowsContext<E extends Env = any> = Context<E, '/team/flows'>
+export type GetTopicContext<E extends Env = any> = Context<E, '/topics/:topicId', { in: { param: {
+ topicId: string,
+ }, }, out: { param: {
+ topicId: string,
+ }, } }>
 export type WorkerClaimJobContext<E extends Env = any> = Context<E, '/worker/claim', { in: { json: ClaimJobRequest, }, out: { json: ClaimJobRequest, } }>
 export type WorkerCompleteJobContext<E extends Env = any> = Context<E, '/worker/jobs/:jobId/complete', { in: { param: {
  jobId: string,

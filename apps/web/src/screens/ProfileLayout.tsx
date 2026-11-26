@@ -1,11 +1,16 @@
 import {
+  listTopics,
   profileMaterialsListMaterials,
   profilesGetProfile,
   teamListFlows,
 } from "@airepetitor/contract/client";
 import { useCallback, useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate, useOutletContext, useParams } from "react-router";
-import type { MaterialSummary, Profile } from "../../../../libs/contract/src/client/api.schemas.ts";
+import type {
+  MaterialSummary,
+  Profile,
+  TopicSummary,
+} from "../../../../libs/contract/src/client/api.schemas.ts";
 import { materialTitle } from "../labels.ts";
 import { UploadDialog } from "./UploadDialog.tsx";
 
@@ -13,6 +18,8 @@ interface ProfileContext {
   profile: Profile;
   materials: MaterialSummary[];
   openUpload: () => void;
+  /** Re-reads the menu lists, e.g. when a Material finished Processing. */
+  reload: () => void;
 }
 
 export const useProfile = () => useOutletContext<ProfileContext>();
@@ -23,6 +30,7 @@ export function ProfileLayout() {
   const navigate = useNavigate();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [materials, setMaterials] = useState<MaterialSummary[]>([]);
+  const [topics, setTopics] = useState<TopicSummary[]>([]);
   const [missing, setMissing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [team, setTeam] = useState(false);
@@ -35,9 +43,15 @@ export function ProfileLayout() {
   }, []);
 
   const reloadMaterials = useCallback(async () => {
-    const res = await profileMaterialsListMaterials(profileId);
-    if (res.status === 200) setMaterials(res.data.items);
+    const [m, t] = await Promise.all([
+      profileMaterialsListMaterials(profileId),
+      listTopics(profileId),
+    ]);
+    if (m.status === 200) setMaterials(m.data.items);
+    if (t.status === 200) setTopics(t.data.items);
   }, [profileId]);
+
+  const reload = useCallback(() => void reloadMaterials(), [reloadMaterials]);
 
   useEffect(() => {
     setProfile(null);
@@ -56,7 +70,12 @@ export function ProfileLayout() {
     );
   if (!profile) return <main>Загрузка…</main>;
 
-  const context: ProfileContext = { profile, materials, openUpload: () => setUploading(true) };
+  const context: ProfileContext = {
+    profile,
+    materials,
+    openUpload: () => setUploading(true),
+    reload,
+  };
 
   return (
     <div style={{ display: "flex", gap: "2rem" }}>
@@ -81,6 +100,18 @@ export function ProfileLayout() {
             {materials.map((m) => (
               <li key={m.id}>
                 <NavLink to={`materials/${m.id}`}>{materialTitle(m)}</NavLink>
+              </li>
+            ))}
+          </ul>
+        )}
+        <h2>Темы</h2>
+        {topics.length === 0 ? (
+          <p>Пока нет</p>
+        ) : (
+          <ul>
+            {topics.map((t) => (
+              <li key={t.id}>
+                <NavLink to={`topics/${t.id}`}>{t.title}</NavLink>
               </li>
             ))}
           </ul>

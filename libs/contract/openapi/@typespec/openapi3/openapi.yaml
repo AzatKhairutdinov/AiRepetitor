@@ -230,6 +230,62 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateMaterialRequest'
+  /profiles/{profileId}/topics:
+    get:
+      operationId: listTopics
+      parameters:
+        - name: profileId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TopicList'
+        '401':
+          description: Access is unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+  /sources/{sourceId}/text:
+    get:
+      operationId: getSourceText
+      parameters:
+        - name: sourceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourceText'
+        '401':
+          description: Access is unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
   /team/flows:
     get:
       operationId: teamListFlows
@@ -253,6 +309,34 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ForbiddenError'
+  /topics/{topicId}:
+    get:
+      operationId: getTopic
+      parameters:
+        - name: topicId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Topic'
+        '401':
+          description: Access is unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
   /worker/claim:
     post:
       operationId: Worker_claimJob
@@ -423,6 +507,37 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SourceUpload'
+    Digest:
+      type: object
+      required:
+        - version
+        - markdown
+        - createdAt
+      properties:
+        version:
+          type: integer
+          format: int32
+        markdown:
+          type: string
+          description: Markdown; `[[source:<sourceId>]]` marks a reference to a Source text.
+        createdAt:
+          type: string
+          format: date-time
+      description: The latest Digest version; the Learner never sees older ones.
+    DigestSource:
+      type: object
+      required:
+        - sourceId
+        - fileName
+        - materialId
+      properties:
+        sourceId:
+          type: string
+        fileName:
+          type: string
+        materialId:
+          type: string
+      description: A Source a Digest may cite.
     FlowList:
       type: object
       required:
@@ -512,6 +627,7 @@ components:
         - status
         - createdAt
         - sources
+        - topics
       properties:
         id:
           type: string
@@ -524,10 +640,17 @@ components:
         createdAt:
           type: string
           format: date-time
+        errorReason:
+          type: string
+          description: Russian reason for the Learner, set when status is failed.
         sources:
           type: array
           items:
             $ref: '#/components/schemas/Source'
+        topics:
+          type: array
+          items:
+            $ref: '#/components/schemas/MaterialTopic'
     MaterialList:
       type: object
       required:
@@ -568,6 +691,20 @@ components:
           type: string
           format: date-time
       description: Everything the Learner sent the Tutor in one upload.
+    MaterialTopic:
+      type: object
+      required:
+        - id
+        - title
+        - mark
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        mark:
+          $ref: '#/components/schemas/TopicMark'
+      description: A Topic this Material touched.
     NewSource:
       type: object
       required:
@@ -669,6 +806,25 @@ components:
         - extracted
         - failed
       description: uploading → uploaded → queued → extracting → extracted | failed
+    SourceText:
+      type: object
+      required:
+        - sourceId
+        - fileName
+        - materialId
+        - profileId
+        - markdown
+      properties:
+        sourceId:
+          type: string
+        fileName:
+          type: string
+        materialId:
+          type: string
+        profileId:
+          type: string
+        markdown:
+          type: string
     SourceUpload:
       type: object
       required:
@@ -686,6 +842,56 @@ components:
             type: string
           description: Headers the PUT must carry.
       description: Where the browser PUTs one file.
+    Topic:
+      type: object
+      required:
+        - id
+        - title
+        - description
+        - profileId
+        - sources
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        profileId:
+          type: string
+        digest:
+          $ref: '#/components/schemas/Digest'
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/DigestSource'
+    TopicList:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TopicSummary'
+    TopicMark:
+      type: string
+      enum:
+        - new
+        - extended
+    TopicSummary:
+      type: object
+      required:
+        - id
+        - title
+        - description
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
     UnauthorizedError:
       type: object
       required:

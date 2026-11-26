@@ -1,6 +1,6 @@
 // Hand-written domain tables. Better Auth tables are generated into auth-schema.ts.
 import { sql } from "drizzle-orm";
-import { integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { user } from "./auth-schema.ts";
 
 export * from "./auth-schema.ts";
@@ -31,6 +31,10 @@ export const material = sqliteTable("material", {
     .references(() => profile.id, { onDelete: "cascade" }),
   title: text("title"),
   status: text("status").notNull(),
+  /** Russian reason shown to the Learner when status is failed. */
+  errorReason: text("error_reason"),
+  /** Playbook edition fixed when Processing started; every call of this Processing uses it. */
+  playbookEdition: text("playbook_edition"),
   /** Sum of model calls during Processing, in millionths of a dollar. */
   costMicroUsd: integer("cost_micro_usd").default(0).notNull(),
   createdAt: integer("created_at", { mode: "timestamp_ms" })
@@ -112,6 +116,8 @@ export const flowTransition = sqliteTable("flow_transition", {
     .references(() => material.id, { onDelete: "cascade" }),
   /** sourceExtraction transitions also carry the Source. */
   sourceId: text("source_id"),
+  /** topicDigest transitions also carry the Topic. */
+  topicId: text("topic_id"),
   machine: text("machine").notNull(),
   fromState: text("from_state"),
   toState: text("to_state").notNull(),
@@ -121,3 +127,68 @@ export const flowTransition = sqliteTable("flow_transition", {
     .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
     .notNull(),
 });
+
+/** The Playbook files of one edition, kept so a Processing finishes on the edition it started with. */
+export const playbookEdition = sqliteTable("playbook_edition", {
+  edition: text("edition").primaryKey(),
+  /** JSON object: path → content. */
+  files: text("files").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" })
+    .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+    .notNull(),
+});
+
+/** One coherent part of what the Learner studies in a Profile; never repeated within it. */
+export const topic = sqliteTable("topic", {
+  id: text("id").primaryKey(),
+  profileId: text("profile_id")
+    .notNull()
+    .references(() => profile.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" })
+    .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+    .notNull(),
+});
+
+/** Which Topics a Material touched: «new» or «extended». */
+export const materialTopic = sqliteTable(
+  "material_topic",
+  {
+    materialId: text("material_id")
+      .notNull()
+      .references(() => material.id, { onDelete: "cascade" }),
+    topicId: text("topic_id")
+      .notNull()
+      .references(() => topic.id, { onDelete: "cascade" }),
+    mark: text("mark").notNull(),
+    position: integer("position").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.materialId, table.topicId] })],
+);
+
+/** One version of a Topic's Digest. The Learner sees the latest. */
+export const digestVersion = sqliteTable(
+  "digest_version",
+  {
+    id: text("id").primaryKey(),
+    topicId: text("topic_id")
+      .notNull()
+      .references(() => topic.id, { onDelete: "cascade" }),
+    number: integer("number").notNull(),
+    /** Markdown with source labels `[[source:<id>]]`. */
+    markdown: text("markdown").notNull(),
+    playbookEdition: text("playbook_edition").notNull(),
+    /** The Material whose Processing wrote this version. */
+    materialId: text("material_id").notNull(),
+    /** JSON array of every Material this version rests on (earlier versions' plus this one). */
+    sourceMaterialIds: text("source_material_ids").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("digest_version_topic_number_uq").on(table.topicId, table.number),
+    uniqueIndex("digest_version_topic_material_uq").on(table.topicId, table.materialId),
+  ],
+);

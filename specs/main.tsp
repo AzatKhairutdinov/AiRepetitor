@@ -172,9 +172,26 @@ model MaterialSummary {
   createdAt: utcDateTime;
 }
 
+union TopicMark {
+  "new",
+  "extended",
+}
+
+/** A Topic this Material touched. */
+model MaterialTopic {
+  id: string;
+  title: string;
+  mark: TopicMark;
+}
+
 model Material {
   ...MaterialSummary;
+
+  /** Russian reason for the Learner, set when status is failed. */
+  errorReason?: string;
+
   sources: Source[];
+  topics: MaterialTopic[];
 }
 
 model MaterialList {
@@ -237,6 +254,62 @@ interface Materials {
   @post
   confirmUpload(@path materialId: string): Material | BadRequestError | UnauthorizedError | NotFoundError;
 }
+
+// --- Topics and Digests ------------------------------------------------------
+
+model TopicSummary {
+  id: string;
+  title: string;
+  description: string;
+}
+
+model TopicList {
+  items: TopicSummary[];
+}
+
+/** The latest Digest version; the Learner never sees older ones. */
+model Digest {
+  version: int32;
+
+  /** Markdown; `[[source:<sourceId>]]` marks a reference to a Source text. */
+  markdown: string;
+
+  createdAt: utcDateTime;
+}
+
+/** A Source a Digest may cite. */
+model DigestSource {
+  sourceId: string;
+  fileName: string;
+  materialId: string;
+}
+
+model Topic {
+  ...TopicSummary;
+  profileId: string;
+  digest?: Digest;
+  sources: DigestSource[];
+}
+
+model SourceText {
+  sourceId: string;
+  fileName: string;
+  materialId: string;
+  profileId: string;
+  markdown: string;
+}
+
+@route("/profiles/{profileId}/topics")
+@get
+op listTopics(@path profileId: string): TopicList | UnauthorizedError | NotFoundError;
+
+@route("/topics/{topicId}")
+@get
+op getTopic(@path topicId: string): Topic | UnauthorizedError | NotFoundError;
+
+@route("/sources/{sourceId}/text")
+@get
+op getSourceText(@path sourceId: string): SourceText | UnauthorizedError | NotFoundError;
 
 // --- Worker protocol (ADR 0003) ----------------------------------------------
 // The worker sends `authorization: Bearer <WORKER_TOKEN>` and `x-worker-protocol: <version>`.
