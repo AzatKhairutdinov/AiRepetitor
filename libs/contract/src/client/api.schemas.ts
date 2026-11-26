@@ -24,6 +24,20 @@ export interface ClaimJobRequest {
   kinds: SourceKind[];
 }
 
+/**
+ * Code Checks of the Playbook (content/checks.yaml), validated by this model at generation.
+ */
+export interface CodeChecks {
+  /** Template sections (level-2 headings), in order. */
+  sections: string[];
+  /** A Russian sentence may have at most this many words; examples in the studied language do not count. */
+  maxSentenceWords: number;
+  /** Bureaucratese and every glossary _Avoid_ word (the generator adds the latter). */
+  forbiddenWords: string[];
+  /** Every source label must point at a Source of this Processing. */
+  checkSourceLabels: boolean;
+}
+
 export type JobOutcome = typeof JobOutcome[keyof typeof JobOutcome];
 
 
