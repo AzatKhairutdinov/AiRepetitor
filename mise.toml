@@ -49,6 +49,8 @@ run = [
   "lychee --config lychee.toml --no-progress '**/*.md'",
   "cargo fmt --manifest-path apps/worker/Cargo.toml --check",
   "cargo clippy --manifest-path apps/worker/Cargo.toml --all-targets --locked -- -D warnings",
+  # The worker tests render a scanned PDF with pdfium (pinned build, checksum-verified).
+  "bash apps/worker/scripts/install-pdfium.sh",
   "cargo test --manifest-path apps/worker/Cargo.toml --locked",
 ]
 

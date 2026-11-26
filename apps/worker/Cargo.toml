@@ -33,6 +33,9 @@ xberg = { version = "1.5.4", default-features = false, features = [
   "pdf",
 ] }
 
+[dev-dependencies]
+tiny_http = "0.12"
+
 [lints.rust]
 unsafe_code = "forbid"
 

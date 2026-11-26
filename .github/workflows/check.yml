@@ -39,6 +39,9 @@ jobs:
           key: cargo-${{ runner.os }}-${{ hashFiles('apps/worker/Cargo.lock', 'mise.toml') }}
           restore-keys: cargo-${{ runner.os }}-
       - run: pnpm install --frozen-lockfile
+      # The worker tests make and transcribe a short recording.
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - run: mise run check
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REQUIRE_FFMPEG: "1"
