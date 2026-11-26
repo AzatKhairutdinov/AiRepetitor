@@ -21,6 +21,9 @@ import type {
   NotFoundError,
   Profile,
   ProfileList,
+  SourceText,
+  Topic,
+  TopicList,
   UnauthorizedError,
   UpgradeRequiredError,
   WorkerJob
@@ -503,6 +506,110 @@ export const profileMaterialsCreateMaterial = async (profileId: string,
 
 
 
+export type listTopicsResponse200 = {
+  data: TopicList
+  status: 200
+}
+
+export type listTopicsResponse401 = {
+  data: UnauthorizedError
+  status: 401
+}
+
+export type listTopicsResponse404 = {
+  data: NotFoundError
+  status: 404
+}
+
+export type listTopicsResponseSuccess = (listTopicsResponse200) & {
+  headers: Headers;
+};
+export type listTopicsResponseError = (listTopicsResponse401 | listTopicsResponse404) & {
+  headers: Headers;
+};
+
+export type listTopicsResponse = (listTopicsResponseSuccess | listTopicsResponseError)
+
+export const getListTopicsUrl = (profileId: string,) => {
+
+
+
+
+  return `/profiles/${profileId}/topics`
+}
+
+export const listTopics = async (profileId: string, options?: RequestInit): Promise<listTopicsResponse> => {
+
+  const res = await fetch(getListTopicsUrl(profileId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listTopicsResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as listTopicsResponse
+}
+
+
+
+export type getSourceTextResponse200 = {
+  data: SourceText
+  status: 200
+}
+
+export type getSourceTextResponse401 = {
+  data: UnauthorizedError
+  status: 401
+}
+
+export type getSourceTextResponse404 = {
+  data: NotFoundError
+  status: 404
+}
+
+export type getSourceTextResponseSuccess = (getSourceTextResponse200) & {
+  headers: Headers;
+};
+export type getSourceTextResponseError = (getSourceTextResponse401 | getSourceTextResponse404) & {
+  headers: Headers;
+};
+
+export type getSourceTextResponse = (getSourceTextResponseSuccess | getSourceTextResponseError)
+
+export const getGetSourceTextUrl = (sourceId: string,) => {
+
+
+
+
+  return `/sources/${sourceId}/text`
+}
+
+export const getSourceText = async (sourceId: string, options?: RequestInit): Promise<getSourceTextResponse> => {
+
+  const res = await fetch(getGetSourceTextUrl(sourceId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getSourceTextResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getSourceTextResponse
+}
+
+
+
 export type teamListFlowsResponse200 = {
   data: FlowList
   status: 200
@@ -551,6 +658,58 @@ export const teamListFlows = async ( options?: RequestInit): Promise<teamListFlo
 
   const data: teamListFlowsResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as teamListFlowsResponse
+}
+
+
+
+export type getTopicResponse200 = {
+  data: Topic
+  status: 200
+}
+
+export type getTopicResponse401 = {
+  data: UnauthorizedError
+  status: 401
+}
+
+export type getTopicResponse404 = {
+  data: NotFoundError
+  status: 404
+}
+
+export type getTopicResponseSuccess = (getTopicResponse200) & {
+  headers: Headers;
+};
+export type getTopicResponseError = (getTopicResponse401 | getTopicResponse404) & {
+  headers: Headers;
+};
+
+export type getTopicResponse = (getTopicResponseSuccess | getTopicResponseError)
+
+export const getGetTopicUrl = (topicId: string,) => {
+
+
+
+
+  return `/topics/${topicId}`
+}
+
+export const getTopic = async (topicId: string, options?: RequestInit): Promise<getTopicResponse> => {
+
+  const res = await fetch(getGetTopicUrl(topicId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getTopicResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getTopicResponse
 }
 
 

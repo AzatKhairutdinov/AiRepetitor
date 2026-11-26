@@ -10,8 +10,9 @@ import type {
   Source,
   SourceKind,
   SourceStatus,
+  TopicMark,
 } from "../../../libs/contract/src/server/api.schemas.ts";
-import { material, profile, source } from "./db/schema.ts";
+import { material, materialTopic, profile, source, topic } from "./db/schema.ts";
 import type { Env } from "./env.ts";
 import { startNextMaterial } from "./processing/queue.ts";
 import type { Storage } from "./storage.ts";
@@ -67,7 +68,18 @@ async function withSources(d: DrizzleD1Database, row: MaterialRow): Promise<Mate
     .from(source)
     .where(eq(source.materialId, row.id))
     .orderBy(asc(source.position));
-  return { ...toSummary(row), sources: sources.map(toSource) };
+  const topics = await d
+    .select({ id: topic.id, title: topic.title, mark: materialTopic.mark })
+    .from(materialTopic)
+    .innerJoin(topic, eq(topic.id, materialTopic.topicId))
+    .where(eq(materialTopic.materialId, row.id))
+    .orderBy(asc(materialTopic.position));
+  return {
+    ...toSummary(row),
+    ...(row.errorReason ? { errorReason: row.errorReason } : {}),
+    sources: sources.map(toSource),
+    topics: topics.map((t) => ({ ...t, mark: t.mark as TopicMark })),
+  };
 }
 
 export async function listMaterials(env: Env, userId: string, profileId: string) {

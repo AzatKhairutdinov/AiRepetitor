@@ -29,6 +29,7 @@ export const MaterialsGetMaterialResponse = zod.object({
   "title": zod.string().optional(),
   "status": zod.enum(['uploading', 'uploaded', 'queued', 'processing', 'topicsReady', 'noTopics', 'failed']).describe('uploading → uploaded → queued → processing → topicsReady | noTopics | failed'),
   "createdAt": zod.iso.datetime({"offset":true}),
+  "errorReason": zod.string().optional().describe('Russian reason for the Learner, set when status is failed.'),
   "sources": zod.array(zod.object({
   "id": zod.string(),
   "fileName": zod.string(),
@@ -38,7 +39,12 @@ export const MaterialsGetMaterialResponse = zod.object({
   "durationSeconds": zod.number().optional(),
   "status": zod.enum(['uploading', 'uploaded', 'queued', 'extracting', 'extracted', 'failed']).describe('uploading → uploaded → queued → extracting → extracted | failed'),
   "errorReason": zod.string().optional().describe('Russian reason for the Learner, set when status is failed.')
-}).describe('One file the Learner sent within a Material.'))
+}).describe('One file the Learner sent within a Material.')),
+  "topics": zod.array(zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "mark": zod.enum(['new', 'extended'])
+}).describe('A Topic this Material touched.'))
 })
 
 
@@ -52,6 +58,7 @@ export const MaterialsConfirmUploadResponse = zod.object({
   "title": zod.string().optional(),
   "status": zod.enum(['uploading', 'uploaded', 'queued', 'processing', 'topicsReady', 'noTopics', 'failed']).describe('uploading → uploaded → queued → processing → topicsReady | noTopics | failed'),
   "createdAt": zod.iso.datetime({"offset":true}),
+  "errorReason": zod.string().optional().describe('Russian reason for the Learner, set when status is failed.'),
   "sources": zod.array(zod.object({
   "id": zod.string(),
   "fileName": zod.string(),
@@ -61,7 +68,12 @@ export const MaterialsConfirmUploadResponse = zod.object({
   "durationSeconds": zod.number().optional(),
   "status": zod.enum(['uploading', 'uploaded', 'queued', 'extracting', 'extracted', 'failed']).describe('uploading → uploaded → queued → extracting → extracted | failed'),
   "errorReason": zod.string().optional().describe('Russian reason for the Learner, set when status is failed.')
-}).describe('One file the Learner sent within a Material.'))
+}).describe('One file the Learner sent within a Material.')),
+  "topics": zod.array(zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "mark": zod.enum(['new', 'extended'])
+}).describe('A Topic this Material touched.'))
 })
 
 
@@ -135,6 +147,7 @@ export const ProfileMaterialsCreateMaterialResponse = zod.object({
   "title": zod.string().optional(),
   "status": zod.enum(['uploading', 'uploaded', 'queued', 'processing', 'topicsReady', 'noTopics', 'failed']).describe('uploading → uploaded → queued → processing → topicsReady | noTopics | failed'),
   "createdAt": zod.iso.datetime({"offset":true}),
+  "errorReason": zod.string().optional().describe('Russian reason for the Learner, set when status is failed.'),
   "sources": zod.array(zod.object({
   "id": zod.string(),
   "fileName": zod.string(),
@@ -144,7 +157,12 @@ export const ProfileMaterialsCreateMaterialResponse = zod.object({
   "durationSeconds": zod.number().optional(),
   "status": zod.enum(['uploading', 'uploaded', 'queued', 'extracting', 'extracted', 'failed']).describe('uploading → uploaded → queued → extracting → extracted | failed'),
   "errorReason": zod.string().optional().describe('Russian reason for the Learner, set when status is failed.')
-}).describe('One file the Learner sent within a Material.'))
+}).describe('One file the Learner sent within a Material.')),
+  "topics": zod.array(zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "mark": zod.enum(['new', 'extended'])
+}).describe('A Topic this Material touched.'))
 }),
   "uploads": zod.array(zod.object({
   "sourceId": zod.string(),
@@ -154,12 +172,60 @@ export const ProfileMaterialsCreateMaterialResponse = zod.object({
 })
 
 
+export const ListTopicsParams = zod.object({
+  "profileId": zod.string()
+})
+
+export const ListTopicsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "description": zod.string()
+}))
+})
+
+
+export const GetSourceTextParams = zod.object({
+  "sourceId": zod.string()
+})
+
+export const GetSourceTextResponse = zod.object({
+  "sourceId": zod.string(),
+  "fileName": zod.string(),
+  "materialId": zod.string(),
+  "profileId": zod.string(),
+  "markdown": zod.string()
+})
+
+
 export const TeamListFlowsResponse = zod.object({
   "items": zod.array(zod.object({
   "id": zod.string().describe('Machine id in libs/flows.'),
   "title": zod.string(),
   "version": zod.int()
 }).describe('One Processing scenario; the diagram itself is drawn from libs/flows.'))
+})
+
+
+export const GetTopicParams = zod.object({
+  "topicId": zod.string()
+})
+
+export const GetTopicResponse = zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "description": zod.string(),
+  "profileId": zod.string(),
+  "digest": zod.object({
+  "version": zod.int(),
+  "markdown": zod.string().describe('Markdown; `[[source:<sourceId>]]` marks a reference to a Source text.'),
+  "createdAt": zod.iso.datetime({"offset":true})
+}).optional().describe('The latest Digest version; the Learner never sees older ones.'),
+  "sources": zod.array(zod.object({
+  "sourceId": zod.string(),
+  "fileName": zod.string(),
+  "materialId": zod.string()
+}).describe('A Source a Digest may cite.'))
 })
 
 

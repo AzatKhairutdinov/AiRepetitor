@@ -18,7 +18,10 @@ import { profilesCreateProfileHandlers } from '../../../../apps/api/src/handlers
 import { profilesGetProfileHandlers } from '../../../../apps/api/src/handlers/profilesGetProfile';
 import { profileMaterialsListMaterialsHandlers } from '../../../../apps/api/src/handlers/profileMaterialsListMaterials';
 import { profileMaterialsCreateMaterialHandlers } from '../../../../apps/api/src/handlers/profileMaterialsCreateMaterial';
+import { listTopicsHandlers } from '../../../../apps/api/src/handlers/listTopics';
+import { getSourceTextHandlers } from '../../../../apps/api/src/handlers/getSourceText';
 import { teamListFlowsHandlers } from '../../../../apps/api/src/handlers/teamListFlows';
+import { getTopicHandlers } from '../../../../apps/api/src/handlers/getTopic';
 import { workerClaimJobHandlers } from '../../../../apps/api/src/handlers/workerClaimJob';
 import { workerCompleteJobHandlers } from '../../../../apps/api/src/handlers/workerCompleteJob';
 
@@ -57,7 +60,16 @@ const app = new Hono()
   .post('/profiles/:profileId/materials', ...profileMaterialsCreateMaterialHandlers)
 
 
+  .get('/profiles/:profileId/topics', ...listTopicsHandlers)
+
+
+  .get('/sources/:sourceId/text', ...getSourceTextHandlers)
+
+
   .get('/team/flows', ...teamListFlowsHandlers)
+
+
+  .get('/topics/:topicId', ...getTopicHandlers)
 
 /**
  * Leases the next job; 204 when there is none.

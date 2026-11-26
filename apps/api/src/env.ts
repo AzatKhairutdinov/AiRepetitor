@@ -3,6 +3,11 @@ export interface Env {
   FILES: R2Bucket;
   /** Processing of one Material (Cloudflare Workflow, class MaterialProcessing). */
   PROCESSING: Workflow<{ materialId: string }>;
+  /** Key of the OpenAI-compatible model provider. */
+  DEEPINFRA_API_KEY?: string;
+  /** Tutor model: OpenAI-compatible base URL and model id. */
+  TUTOR_BASE_URL?: string;
+  TUTOR_MODEL?: string;
   /** Shared secret of the extraction worker. */
   WORKER_TOKEN: string;
   BETTER_AUTH_SECRET: string;

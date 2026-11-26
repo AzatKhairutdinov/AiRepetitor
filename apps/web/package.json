@@ -12,6 +12,7 @@
     "elkjs": "^0.12.1",
     "react": "*",
     "react-dom": "*",
+    "react-markdown": "^10.1.0",
     "react-router": "^8.5.3"
   }
 }

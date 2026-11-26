@@ -57,8 +57,12 @@ description = "Apply autofixes"
 run = ["rumdl check --fix .", "typos -w", "pnpm exec oxlint --fix .", "pnpm exec oxfmt ."]
 
 [tasks.generate]
-description = "Regenerate contract code from TypeSpec"
-run = "pnpm nx run contract:generate"
+description = "Regenerate contract code from TypeSpec and the embedded Playbook"
+run = [
+  "pnpm nx run contract:generate",
+  "node scripts/gen-playbook.ts",
+  "pnpm exec oxfmt apps/api/src/playbook.generated.ts",
+]
 
 # Slow, network-bound: known-vulnerability scan of the lockfile (runs on a schedule and on lockfile changes)
 [tasks.security]
