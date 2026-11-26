@@ -233,8 +233,7 @@ export const message = sqliteTable(
     materialId: text("material_id")
       .notNull()
       .references(() => material.id, { onDelete: "cascade" }),
-    /** tutor | learner */
-    author: text("author").notNull(),
+    author: text("author", { enum: ["tutor", "learner"] }).notNull(),
     text: text("text").notNull(),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)

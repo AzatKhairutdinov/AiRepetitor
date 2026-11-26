@@ -18,6 +18,7 @@ import type { Env } from "../env.ts";
 import { languageName } from "../languages.ts";
 import { tutorModel } from "../models/roles.ts";
 import { type Playbook, loadPlaybook } from "../playbook.ts";
+import { PLAYBOOK_EDITION } from "../playbook.generated.ts";
 import { ask, fill } from "./context.ts";
 import { FAILURE_REASON, PROCESSING_BROKE } from "./reasons.ts";
 
@@ -28,9 +29,14 @@ export type ChatEvent =
   | { kind: "Темы найдены" }
   | { kind: "Тема дополнена"; topicId: string }
   | { kind: "Без тем" }
-  | { kind: "Ошибка материала"; reason: string };
+  | { kind: "Ошибка материала"; reason: string }
+  /** Processing broke outside the machine; «Повторить» cannot pick it up, so it is not offered. */
+  | { kind: "Сбой обработки"; reason: string };
 
 type Event = { type: string; sourceId?: string; ok?: boolean };
+
+/** Longest wait for the Tutor's model; then the fallback line is written. */
+const MODEL_WAIT_MS = 60_000;
 
 /**
  * The Chat events of one «Обработка материала» transition, in order. Pure. One transition may
@@ -111,6 +117,7 @@ async function factsOf(
     case "Без тем":
       return {};
     case "Ошибка материала":
+    case "Сбой обработки":
       return { reason: event.reason };
   }
 }
@@ -148,9 +155,10 @@ async function compose(
     .from(material)
     .innerJoin(profile, eq(profile.id, material.profileId))
     .where(eq(material.id, materialId));
-  if (!row?.edition) throw new Error(`Material ${materialId} has no Playbook edition`);
-  const p = await loadPlaybook(env, row.edition);
+  // A Material without its edition still gets a line, by the Playbook built into this API.
+  const p = await loadPlaybook(env, row?.edition ?? PLAYBOOK_EDITION);
   const fallback = fallbackLine(p, event.kind, facts);
+  if (!row) return fallback;
   try {
     const system = [
       fill(p.file("content/tutor/chat.md"), languageName(row.language as LanguageCode)),
@@ -164,16 +172,22 @@ async function compose(
     ]
       .filter(Boolean)
       .join("\n\n");
-    const text = await ask(
-      env,
-      tutorModel(env),
-      materialId,
-      [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-      false,
-    );
+    // A hanging provider must not hold the step until Workflows time it out and fail the flow.
+    const text = await Promise.race([
+      ask(
+        env,
+        tutorModel(env),
+        materialId,
+        [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+        false,
+      ),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("the model took too long")), MODEL_WAIT_MS),
+      ),
+    ]);
     return text.trim() || fallback;
   } catch (error) {
     console.warn("Chat falls back to the Playbook line", materialId, event.kind, error);
@@ -193,6 +207,15 @@ export async function postMessages(
 ): Promise<void> {
   for (const [i, event] of events.entries())
     await postMessage(env, materialId, `${materialId}:${stepId}:${i}`, event);
+}
+
+/** Work for a notify step, or null when the transition says nothing to the Learner. */
+export function chatPoster(
+  env: Env,
+  materialId: string,
+  events: ChatEvent[],
+): ((stepId: string) => Promise<void>) | null {
+  return events.length ? (stepId) => postMessages(env, materialId, stepId, events) : null;
 }
 
 async function postMessage(

@@ -14,7 +14,6 @@ import type {
   Material,
   MaterialStatus,
   MaterialSummary,
-  MessageAuthor,
   MessageList,
   Source,
   SourceKind,
@@ -132,7 +131,7 @@ export async function listMessages(
   return {
     items: rows.map((r) => ({
       id: r.id,
-      author: r.author as MessageAuthor,
+      author: r.author,
       text: r.text,
       createdAt: r.createdAt.toISOString(),
     })),

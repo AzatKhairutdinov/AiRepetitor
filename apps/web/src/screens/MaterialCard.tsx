@@ -36,9 +36,11 @@ export function MaterialCard() {
     setMissing(false);
     let timer: ReturnType<typeof setTimeout> | undefined;
     let stopped = false;
-    // Poll the Material and its Chat every 5 s until the Material reaches a final state.
+    // Poll the Material and then its Chat every 5 s until the Material reaches a final state.
+    // The Chat is read second: its last line is written before the final status.
     const load = () =>
-      Promise.all([materialsGetMaterial(materialId), materialsListMessages(materialId)])
+      materialsGetMaterial(materialId)
+        .then(async (res) => [res, await materialsListMessages(materialId)] as const)
         .then(([res, chat]) => {
           if (stopped) return;
           if (res.status !== 200) return setMissing(true);
