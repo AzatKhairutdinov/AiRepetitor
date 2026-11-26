@@ -8,6 +8,8 @@ export default defineConfig({
       "/health": "http://localhost:8787",
       "/languages": "http://localhost:8787",
       "/profiles": "http://localhost:8787",
+      "/materials": "http://localhost:8787",
+      "/storage": "http://localhost:8787",
       "/api": "http://localhost:8787",
     },
   },

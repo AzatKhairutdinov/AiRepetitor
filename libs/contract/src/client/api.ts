@@ -5,10 +5,15 @@
  * OpenAPI spec version: 0.0.0
  */
 import type {
+  BadRequestError,
   ConflictError,
+  CreateMaterialRequest,
   CreateProfileRequest,
+  CreatedMaterial,
   Health,
   LanguageList,
+  Material,
+  MaterialList,
   NotFoundError,
   Profile,
   ProfileList,
@@ -112,6 +117,118 @@ export const listLanguages = async ( options?: RequestInit): Promise<listLanguag
 
   const data: listLanguagesResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as listLanguagesResponse
+}
+
+
+
+export type materialsGetMaterialResponse200 = {
+  data: Material
+  status: 200
+}
+
+export type materialsGetMaterialResponse401 = {
+  data: UnauthorizedError
+  status: 401
+}
+
+export type materialsGetMaterialResponse404 = {
+  data: NotFoundError
+  status: 404
+}
+
+export type materialsGetMaterialResponseSuccess = (materialsGetMaterialResponse200) & {
+  headers: Headers;
+};
+export type materialsGetMaterialResponseError = (materialsGetMaterialResponse401 | materialsGetMaterialResponse404) & {
+  headers: Headers;
+};
+
+export type materialsGetMaterialResponse = (materialsGetMaterialResponseSuccess | materialsGetMaterialResponseError)
+
+export const getMaterialsGetMaterialUrl = (materialId: string,) => {
+
+
+
+
+  return `/materials/${materialId}`
+}
+
+export const materialsGetMaterial = async (materialId: string, options?: RequestInit): Promise<materialsGetMaterialResponse> => {
+
+  const res = await fetch(getMaterialsGetMaterialUrl(materialId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: materialsGetMaterialResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as materialsGetMaterialResponse
+}
+
+
+
+export type materialsConfirmUploadResponse200 = {
+  data: Material
+  status: 200
+}
+
+export type materialsConfirmUploadResponse400 = {
+  data: BadRequestError
+  status: 400
+}
+
+export type materialsConfirmUploadResponse401 = {
+  data: UnauthorizedError
+  status: 401
+}
+
+export type materialsConfirmUploadResponse404 = {
+  data: NotFoundError
+  status: 404
+}
+
+export type materialsConfirmUploadResponseSuccess = (materialsConfirmUploadResponse200) & {
+  headers: Headers;
+};
+export type materialsConfirmUploadResponseError = (materialsConfirmUploadResponse400 | materialsConfirmUploadResponse401 | materialsConfirmUploadResponse404) & {
+  headers: Headers;
+};
+
+export type materialsConfirmUploadResponse = (materialsConfirmUploadResponseSuccess | materialsConfirmUploadResponseError)
+
+export const getMaterialsConfirmUploadUrl = (materialId: string,) => {
+
+
+
+
+  return `/materials/${materialId}/uploaded`
+}
+
+/**
+ * Called after every PUT finished: checks the files are in storage.
+ */
+export const materialsConfirmUpload = async (materialId: string, options?: RequestInit): Promise<materialsConfirmUploadResponse> => {
+
+  const res = await fetch(getMaterialsConfirmUploadUrl(materialId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: materialsConfirmUploadResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as materialsConfirmUploadResponse
 }
 
 
@@ -263,6 +380,119 @@ export const profilesGetProfile = async (profileId: string, options?: RequestIni
 
   const data: profilesGetProfileResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as profilesGetProfileResponse
+}
+
+
+
+export type profileMaterialsListMaterialsResponse200 = {
+  data: MaterialList
+  status: 200
+}
+
+export type profileMaterialsListMaterialsResponse401 = {
+  data: UnauthorizedError
+  status: 401
+}
+
+export type profileMaterialsListMaterialsResponse404 = {
+  data: NotFoundError
+  status: 404
+}
+
+export type profileMaterialsListMaterialsResponseSuccess = (profileMaterialsListMaterialsResponse200) & {
+  headers: Headers;
+};
+export type profileMaterialsListMaterialsResponseError = (profileMaterialsListMaterialsResponse401 | profileMaterialsListMaterialsResponse404) & {
+  headers: Headers;
+};
+
+export type profileMaterialsListMaterialsResponse = (profileMaterialsListMaterialsResponseSuccess | profileMaterialsListMaterialsResponseError)
+
+export const getProfileMaterialsListMaterialsUrl = (profileId: string,) => {
+
+
+
+
+  return `/profiles/${profileId}/materials`
+}
+
+export const profileMaterialsListMaterials = async (profileId: string, options?: RequestInit): Promise<profileMaterialsListMaterialsResponse> => {
+
+  const res = await fetch(getProfileMaterialsListMaterialsUrl(profileId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: profileMaterialsListMaterialsResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as profileMaterialsListMaterialsResponse
+}
+
+
+
+export type profileMaterialsCreateMaterialResponse201 = {
+  data: CreatedMaterial
+  status: 201
+}
+
+export type profileMaterialsCreateMaterialResponse400 = {
+  data: BadRequestError
+  status: 400
+}
+
+export type profileMaterialsCreateMaterialResponse401 = {
+  data: UnauthorizedError
+  status: 401
+}
+
+export type profileMaterialsCreateMaterialResponse404 = {
+  data: NotFoundError
+  status: 404
+}
+
+export type profileMaterialsCreateMaterialResponseSuccess = (profileMaterialsCreateMaterialResponse201) & {
+  headers: Headers;
+};
+export type profileMaterialsCreateMaterialResponseError = (profileMaterialsCreateMaterialResponse400 | profileMaterialsCreateMaterialResponse401 | profileMaterialsCreateMaterialResponse404) & {
+  headers: Headers;
+};
+
+export type profileMaterialsCreateMaterialResponse = (profileMaterialsCreateMaterialResponseSuccess | profileMaterialsCreateMaterialResponseError)
+
+export const getProfileMaterialsCreateMaterialUrl = (profileId: string,) => {
+
+
+
+
+  return `/profiles/${profileId}/materials`
+}
+
+/**
+ * Registers a Material and its Sources and returns a write link per file.
+ */
+export const profileMaterialsCreateMaterial = async (profileId: string,
+    createMaterialRequest: CreateMaterialRequest, options?: RequestInit): Promise<profileMaterialsCreateMaterialResponse> => {
+
+  const res = await fetch(getProfileMaterialsCreateMaterialUrl(profileId),
+  {
+    ...options,
+    method: 'POST',
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
+    body: JSON.stringify(createMaterialRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: profileMaterialsCreateMaterialResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as profileMaterialsCreateMaterialResponse
 }
 
 

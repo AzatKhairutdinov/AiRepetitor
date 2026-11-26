@@ -7,11 +7,22 @@
 import type { Context, Env } from 'hono';
 
 import type {
-CreateProfileRequest
+CreateMaterialRequest,
+  CreateProfileRequest
 } from './api.schemas.ts';
 
 export type HealthContext<E extends Env = any> = Context<E, '/health'>
 export type ListLanguagesContext<E extends Env = any> = Context<E, '/languages'>
+export type MaterialsGetMaterialContext<E extends Env = any> = Context<E, '/materials/:materialId', { in: { param: {
+ materialId: string,
+ }, }, out: { param: {
+ materialId: string,
+ }, } }>
+export type MaterialsConfirmUploadContext<E extends Env = any> = Context<E, '/materials/:materialId/uploaded', { in: { param: {
+ materialId: string,
+ }, }, out: { param: {
+ materialId: string,
+ }, } }>
 export type ProfilesListProfilesContext<E extends Env = any> = Context<E, '/profiles'>
 export type ProfilesCreateProfileContext<E extends Env = any> = Context<E, '/profiles', { in: { json: CreateProfileRequest, }, out: { json: CreateProfileRequest, } }>
 export type ProfilesGetProfileContext<E extends Env = any> = Context<E, '/profiles/:profileId', { in: { param: {
@@ -19,3 +30,13 @@ export type ProfilesGetProfileContext<E extends Env = any> = Context<E, '/profil
  }, }, out: { param: {
  profileId: string,
  }, } }>
+export type ProfileMaterialsListMaterialsContext<E extends Env = any> = Context<E, '/profiles/:profileId/materials', { in: { param: {
+ profileId: string,
+ }, }, out: { param: {
+ profileId: string,
+ }, } }>
+export type ProfileMaterialsCreateMaterialContext<E extends Env = any> = Context<E, '/profiles/:profileId/materials', { in: { param: {
+ profileId: string,
+ },json: CreateMaterialRequest, }, out: { param: {
+ profileId: string,
+ },json: CreateMaterialRequest, } }>

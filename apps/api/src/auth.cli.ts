@@ -6,4 +6,4 @@ export const auth = createAuth({
   DB: {} as D1Database,
   BETTER_AUTH_SECRET: "cli-only",
   BETTER_AUTH_URL: "http://localhost:8787",
-} satisfies Env);
+} satisfies Pick<Env, "DB" | "BETTER_AUTH_SECRET" | "BETTER_AUTH_URL">);

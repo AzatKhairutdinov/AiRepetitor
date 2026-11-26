@@ -19,6 +19,52 @@ export const ListLanguagesResponse = zod.object({
 })
 
 
+export const MaterialsGetMaterialParams = zod.object({
+  "materialId": zod.string()
+})
+
+export const MaterialsGetMaterialResponse = zod.object({
+  "id": zod.string(),
+  "profileId": zod.string(),
+  "title": zod.string().optional(),
+  "status": zod.enum(['uploading', 'uploaded', 'queued', 'processing', 'topicsReady', 'noTopics', 'failed']).describe('uploading → uploaded → queued → processing → topicsReady | noTopics | failed'),
+  "createdAt": zod.iso.datetime({"offset":true}),
+  "sources": zod.array(zod.object({
+  "id": zod.string(),
+  "fileName": zod.string(),
+  "kind": zod.enum(['pdf', 'image', 'document', 'audio', 'video']),
+  "mimeType": zod.string(),
+  "size": zod.int(),
+  "durationSeconds": zod.number().optional(),
+  "status": zod.enum(['uploading', 'uploaded', 'queued', 'extracting', 'extracted', 'failed']).describe('uploading → uploaded → queued → extracting → extracted | failed'),
+  "errorReason": zod.string().optional().describe('Russian reason for the Learner, set when status is failed.')
+}).describe('One file the Learner sent within a Material.'))
+})
+
+
+export const MaterialsConfirmUploadParams = zod.object({
+  "materialId": zod.string()
+})
+
+export const MaterialsConfirmUploadResponse = zod.object({
+  "id": zod.string(),
+  "profileId": zod.string(),
+  "title": zod.string().optional(),
+  "status": zod.enum(['uploading', 'uploaded', 'queued', 'processing', 'topicsReady', 'noTopics', 'failed']).describe('uploading → uploaded → queued → processing → topicsReady | noTopics | failed'),
+  "createdAt": zod.iso.datetime({"offset":true}),
+  "sources": zod.array(zod.object({
+  "id": zod.string(),
+  "fileName": zod.string(),
+  "kind": zod.enum(['pdf', 'image', 'document', 'audio', 'video']),
+  "mimeType": zod.string(),
+  "size": zod.int(),
+  "durationSeconds": zod.number().optional(),
+  "status": zod.enum(['uploading', 'uploaded', 'queued', 'extracting', 'extracted', 'failed']).describe('uploading → uploaded → queued → extracting → extracted | failed'),
+  "errorReason": zod.string().optional().describe('Russian reason for the Learner, set when status is failed.')
+}).describe('One file the Learner sent within a Material.'))
+})
+
+
 export const ProfilesListProfilesResponse = zod.object({
   "items": zod.array(zod.object({
   "id": zod.string(),
@@ -51,4 +97,59 @@ export const ProfilesGetProfileResponse = zod.object({
   "name": zod.string().describe('Named after the language, in Russian.'),
   "createdAt": zod.iso.datetime({"offset":true})
 }).describe('One Learner studying one language.')
+
+
+export const ProfileMaterialsListMaterialsParams = zod.object({
+  "profileId": zod.string()
+})
+
+export const ProfileMaterialsListMaterialsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.string(),
+  "profileId": zod.string(),
+  "title": zod.string().optional(),
+  "status": zod.enum(['uploading', 'uploaded', 'queued', 'processing', 'topicsReady', 'noTopics', 'failed']).describe('uploading → uploaded → queued → processing → topicsReady | noTopics | failed'),
+  "createdAt": zod.iso.datetime({"offset":true})
+}).describe('Everything the Learner sent the Tutor in one upload.'))
+})
+
+
+export const ProfileMaterialsCreateMaterialParams = zod.object({
+  "profileId": zod.string()
+})
+
+export const ProfileMaterialsCreateMaterialBody = zod.object({
+  "title": zod.string().optional(),
+  "sources": zod.array(zod.object({
+  "fileName": zod.string(),
+  "mimeType": zod.string(),
+  "size": zod.int(),
+  "durationSeconds": zod.number().optional().describe('Seconds, when the browser could read it from the media metadata.')
+}))
+})
+
+export const ProfileMaterialsCreateMaterialResponse = zod.object({
+  "material": zod.object({
+  "id": zod.string(),
+  "profileId": zod.string(),
+  "title": zod.string().optional(),
+  "status": zod.enum(['uploading', 'uploaded', 'queued', 'processing', 'topicsReady', 'noTopics', 'failed']).describe('uploading → uploaded → queued → processing → topicsReady | noTopics | failed'),
+  "createdAt": zod.iso.datetime({"offset":true}),
+  "sources": zod.array(zod.object({
+  "id": zod.string(),
+  "fileName": zod.string(),
+  "kind": zod.enum(['pdf', 'image', 'document', 'audio', 'video']),
+  "mimeType": zod.string(),
+  "size": zod.int(),
+  "durationSeconds": zod.number().optional(),
+  "status": zod.enum(['uploading', 'uploaded', 'queued', 'extracting', 'extracted', 'failed']).describe('uploading → uploaded → queued → extracting → extracted | failed'),
+  "errorReason": zod.string().optional().describe('Russian reason for the Learner, set when status is failed.')
+}).describe('One file the Learner sent within a Material.'))
+}),
+  "uploads": zod.array(zod.object({
+  "sourceId": zod.string(),
+  "url": zod.string(),
+  "headers": zod.record(zod.string(), zod.string()).describe('Headers the PUT must carry.')
+}).describe('Where the browser PUTs one file.'))
+})
 

@@ -11,9 +11,13 @@ import {
 
 import { healthHandlers } from '../../../../apps/api/src/handlers/health';
 import { listLanguagesHandlers } from '../../../../apps/api/src/handlers/listLanguages';
+import { materialsGetMaterialHandlers } from '../../../../apps/api/src/handlers/materialsGetMaterial';
+import { materialsConfirmUploadHandlers } from '../../../../apps/api/src/handlers/materialsConfirmUpload';
 import { profilesListProfilesHandlers } from '../../../../apps/api/src/handlers/profilesListProfiles';
 import { profilesCreateProfileHandlers } from '../../../../apps/api/src/handlers/profilesCreateProfile';
 import { profilesGetProfileHandlers } from '../../../../apps/api/src/handlers/profilesGetProfile';
+import { profileMaterialsListMaterialsHandlers } from '../../../../apps/api/src/handlers/profileMaterialsListMaterials';
+import { profileMaterialsCreateMaterialHandlers } from '../../../../apps/api/src/handlers/profileMaterialsCreateMaterial';
 
 const app = new Hono()
 
@@ -23,6 +27,15 @@ const app = new Hono()
   .get('/languages', ...listLanguagesHandlers)
 
 
+  .get('/materials/:materialId', ...materialsGetMaterialHandlers)
+
+/**
+ * Called after every PUT finished: checks the files are in storage.
+ */
+
+  .post('/materials/:materialId/uploaded', ...materialsConfirmUploadHandlers)
+
+
   .get('/profiles', ...profilesListProfilesHandlers)
 
 
@@ -30,6 +43,15 @@ const app = new Hono()
 
 
   .get('/profiles/:profileId', ...profilesGetProfileHandlers)
+
+
+  .get('/profiles/:profileId/materials', ...profileMaterialsListMaterialsHandlers)
+
+/**
+ * Registers a Material and its Sources and returns a write link per file.
+ */
+
+  .post('/profiles/:profileId/materials', ...profileMaterialsCreateMaterialHandlers)
 
 ;
 

@@ -9,3 +9,8 @@ binding = "DB"
 database_name = "airepetitor"
 database_id = "00000000-0000-0000-0000-000000000000"
 migrations_dir = "migrations"
+
+# Originals, extracted audio and Source texts.
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "airepetitor-files"
