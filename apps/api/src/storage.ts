@@ -135,10 +135,31 @@ localStorageRoutes.on(["GET", "PUT"], "/storage/:key{.+}", async (c) => {
     });
     return c.body(null, 200);
   }
-  const object = await c.env.FILES.get(key);
+  // ffprobe and ffmpeg seek in recordings with Range requests, as R2 serves them.
+  const range = parseRange(c.req.header("range"));
+  const object = await c.env.FILES.get(key, range ? { range } : {});
   if (!object) return c.text("Not found", 404);
   const headers = new Headers();
   object.writeHttpMetadata(headers);
+  headers.set("accept-ranges", "bytes");
+  const served = object.range as { offset?: number; length?: number; suffix?: number } | undefined;
+  if (range && served && "body" in object) {
+    const offset =
+      served.suffix !== undefined ? Math.max(0, object.size - served.suffix) : (served.offset ?? 0);
+    const length = Math.min(served.length ?? object.size - offset, object.size - offset);
+    headers.set("content-length", String(length));
+    headers.set("content-range", `bytes ${offset}-${offset + length - 1}/${object.size}`);
+    return new Response(object.body, { status: 206, headers });
+  }
   headers.set("content-length", String(object.size));
-  return new Response(object.body, { headers });
+  return new Response("body" in object ? object.body : null, { headers });
 });
+
+/** One `bytes=` range as R2 takes it; anything else serves the whole object. */
+function parseRange(header: string | undefined): R2Range | undefined {
+  const m = /^bytes=(\d*)-(\d*)$/.exec(header?.trim() ?? "");
+  if (!m || (m[1] === "" && m[2] === "")) return undefined;
+  if (m[1] === "") return { suffix: Number(m[2]) };
+  const offset = Number(m[1]);
+  return m[2] === "" ? { offset } : { offset, length: Number(m[2]) - offset + 1 };
+}

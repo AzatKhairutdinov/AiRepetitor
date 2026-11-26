@@ -34,6 +34,8 @@ struct State {
     model_calls: usize,
     /// Protocol header of the last claim.
     protocol: Option<String>,
+    /// The worker's log after its run, for failure messages.
+    log: String,
 }
 
 struct Fake {
@@ -54,8 +56,14 @@ impl Fake {
             for mut req in server.incoming_requests() {
                 let mut body = Vec::new();
                 let _ = req.as_reader().read_to_end(&mut body);
-                let (code, out) = handle(&shared, provider, &mut req, body);
-                let _ = req.respond(tiny_http::Response::from_data(out).with_status_code(code));
+                let (code, out, headers) = handle(&shared, provider, &mut req, body);
+                let mut res = tiny_http::Response::from_data(out).with_status_code(code);
+                for (name, value) in headers {
+                    res = res.with_header(
+                        tiny_http::Header::from_bytes(name.as_bytes(), value.as_bytes()).unwrap(),
+                    );
+                }
+                let _ = req.respond(res);
             }
         });
         Self { base, state }
@@ -106,7 +114,13 @@ impl Fake {
             thread::sleep(Duration::from_millis(100));
         }
         stop(&mut child);
+        self.state.lock().unwrap().log =
+            std::fs::read_to_string(logs.join("worker.log")).unwrap_or_default();
         let _ = std::fs::remove_dir_all(logs);
+    }
+
+    fn log(&self) -> String {
+        self.state.lock().unwrap().log.clone()
     }
 
     fn complete(&self, job: &str) -> Value {
@@ -130,7 +144,7 @@ fn handle(
     provider: Provider,
     req: &mut tiny_http::Request,
     body: Vec<u8>,
-) -> (u16, Vec<u8>) {
+) -> (u16, Vec<u8>, Vec<(&'static str, String)>) {
     let url = req.url().to_owned();
     let header = |name: &str| {
         req.headers()
@@ -143,37 +157,51 @@ fn handle(
         ("POST", "/worker/claim") => {
             s.protocol = header("x-worker-protocol");
             if header("authorization").as_deref() != Some(&format!("Bearer {TOKEN}")) {
-                return (401, b"{}".to_vec());
+                return (401, b"{}".to_vec(), vec![]);
             }
             if s.protocol.as_deref() != Some(PROTOCOL) {
-                return (426, b"{\"message\":\"upgrade\"}".to_vec());
+                return (426, b"{\"message\":\"upgrade\"}".to_vec(), vec![]);
             }
             match s.jobs.iter_mut().find(|j| j["claimed"] != true) {
                 Some(job) => {
                     job["claimed"] = true.into();
-                    (200, job.to_string().into_bytes())
+                    (200, job.to_string().into_bytes(), vec![])
                 }
-                None => (204, vec![]),
+                None => (204, vec![], vec![]),
             }
         }
         ("POST", path) if path.ends_with("/complete") => {
             let mut done: Value = serde_json::from_slice(&body).unwrap_or(Value::Null);
             done["job"] = path.split('/').nth(3).unwrap_or_default().into();
             s.completes.push(done);
-            (204, vec![])
+            (204, vec![], vec![])
         }
+        // Signed links serve Range requests as R2 does; ffprobe and ffmpeg seek with them.
         ("GET", path) => match s.files.get(path) {
-            Some(bytes) => (200, bytes.clone()),
-            None => (404, vec![]),
+            Some(bytes) => match header("range").and_then(|r| byte_range(&r, bytes.len())) {
+                Some((from, to)) => (
+                    206,
+                    bytes[from..=to].to_vec(),
+                    vec![
+                        ("Accept-Ranges", "bytes".into()),
+                        (
+                            "Content-Range",
+                            format!("bytes {from}-{to}/{}", bytes.len()),
+                        ),
+                    ],
+                ),
+                None => (200, bytes.clone(), vec![("Accept-Ranges", "bytes".into())]),
+            },
+            None => (404, vec![], vec![]),
         },
         ("PUT", path) => {
             s.puts.insert(path.to_owned(), body);
-            (200, vec![])
+            (200, vec![], vec![])
         }
         ("POST", "/v1/chat/completions") => {
             s.model_calls += 1;
             let content = match provider {
-                Provider::Down => return (503, b"busy".to_vec()),
+                Provider::Down => return (503, b"busy".to_vec(), vec![]),
                 Provider::Unreadable => "UNREADABLE",
                 Provider::Answers => "Hablé con Ana.",
             };
@@ -181,20 +209,32 @@ fn handle(
                 "choices": [{ "message": { "content": content } }],
                 "usage": { "prompt_tokens": 1500, "completion_tokens": 20 },
             });
-            (200, answer.to_string().into_bytes())
+            (200, answer.to_string().into_bytes(), vec![])
         }
         ("POST", "/v1/audio/transcriptions") => {
             s.model_calls += 1;
             if provider == Provider::Down {
-                return (503, b"busy".to_vec());
+                return (503, b"busy".to_vec(), vec![]);
             }
             let answer = json!({ "text": "…", "segments": [
                 { "start": 1.5, "end": 4.0, "text": " Hola, ¿qué tal?" },
                 { "start": 12.2, "end": 15.0, "text": "Добрый день" },
             ]});
-            (200, answer.to_string().into_bytes())
+            (200, answer.to_string().into_bytes(), vec![])
         }
-        _ => (404, vec![]),
+        _ => (404, vec![], vec![]),
+    }
+}
+
+/// `bytes=a-b`, `bytes=a-` or `bytes=-n` within `len`, as inclusive positions.
+fn byte_range(header: &str, len: usize) -> Option<(usize, usize)> {
+    let (from, to) = header.trim().strip_prefix("bytes=")?.split_once('-')?;
+    let last = len.checked_sub(1)?;
+    match (from.parse::<usize>().ok(), to.parse::<usize>().ok()) {
+        (Some(a), Some(b)) if a <= b => Some((a, b.min(last))),
+        (Some(a), None) if a <= last => Some((a, last)),
+        (None, Some(n)) if n > 0 => Some((len.saturating_sub(n), last)),
+        _ => None,
     }
 }
 
@@ -377,7 +417,12 @@ fn a_video_becomes_timed_lines_and_its_audio_is_saved() {
     fake.run_worker(QUICK);
 
     let done = fake.complete(&job);
-    assert_eq!(done["outcome"], "success", "{done}");
+    assert_eq!(
+        done["outcome"],
+        "success",
+        "{done}\nworker log:\n{}",
+        fake.log()
+    );
     assert_eq!(done["method"], "whisper");
     assert_eq!(done["audioSaved"], true);
     let minutes = done["usage"][0]["audioMinutes"].as_f64().unwrap();
@@ -401,7 +446,12 @@ fn a_recording_over_two_hours_is_refused() {
 
     let done = fake.complete(&job);
     assert_eq!(done["outcome"], "failure");
-    assert_eq!(done["reason"], "запись длиннее 2 часов");
+    assert_eq!(
+        done["reason"],
+        "запись длиннее 2 часов",
+        "worker log:\n{}",
+        fake.log()
+    );
     assert_eq!(fake.state.lock().unwrap().model_calls, 0);
 }
 
@@ -417,6 +467,10 @@ fn speech_recognition_errors_are_retried_three_times_then_fail_the_source() {
 
     let done = fake.complete(&job);
     assert_eq!(done["outcome"], "failure");
-    assert_eq!(done["reason"], "временная ошибка распознавания");
+    let log = fake.log();
+    assert_eq!(
+        done["reason"], "временная ошибка распознавания",
+        "worker log:\n{log}"
+    );
     assert_eq!(fake.state.lock().unwrap().model_calls, 4);
 }

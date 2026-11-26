@@ -463,6 +463,34 @@ describe("Загрузка", () => {
 });
 
 describe("Worker protocol", () => {
+  it("serves parts of an original by Range, as ffmpeg reads recordings", async () => {
+    const learner = await signUp();
+    await upload(learner, await profileOf(learner), ["lesson.txt"]);
+    const job = (await claim())!;
+    const bytes = new TextEncoder().encode(BODY);
+    const part = async (range: string) => {
+      const res = await app.request(pathOf(job.readUrl), { headers: { range } }, env);
+      return {
+        status: res.status,
+        range: res.headers.get("content-range"),
+        body: new Uint8Array(await res.arrayBuffer()),
+      };
+    };
+    expect(await part("bytes=0-3")).toEqual({
+      status: 206,
+      range: `bytes 0-3/${bytes.length}`,
+      body: bytes.slice(0, 4),
+    });
+    expect(await part("bytes=5-")).toMatchObject({ status: 206, body: bytes.slice(5) });
+    expect(await part("bytes=-4")).toMatchObject({
+      status: 206,
+      range: `bytes ${bytes.length - 4}-${bytes.length - 1}/${bytes.length}`,
+      body: bytes.slice(-4),
+    });
+    expect((await complete(job, "success")).status).toBe(204);
+    await workflows.settle();
+  });
+
   it("answers 426 to another protocol version", async () => {
     const res = await workerCall("/worker/claim", { kinds: ["document"] }, "1");
     expect(res.status).toBe(426);
