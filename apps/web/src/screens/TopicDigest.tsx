@@ -2,6 +2,8 @@ import { getTopic } from "@airepetitor/contract/client";
 import { useEffect, useState } from "react";
 import Markdown from "react-markdown";
 import { Link, useParams } from "react-router";
+import { ScriptToggle, rehypeCyrillic, useSerbianScript } from "../serbian/script.tsx";
+import { useProfile } from "./ProfileLayout.tsx";
 import type { Topic } from "../../../../libs/contract/src/client/api.schemas.ts";
 
 /** `[[source:<id>]]` → a link to that Source text, named after its file. */
@@ -18,6 +20,10 @@ export function TopicDigest() {
   const { topicId = "" } = useParams();
   const [topic, setTopic] = useState<Topic | null>(null);
   const [missing, setMissing] = useState(false);
+  const { profile } = useProfile();
+  const serbian = profile.language === "sr";
+  const [script, setScript] = useSerbianScript();
+  const plugins = serbian && script === "cyrillic" ? [rehypeCyrillic] : [];
 
   useEffect(() => {
     setTopic(null);
@@ -33,7 +39,9 @@ export function TopicDigest() {
 
   return (
     <main style={{ flex: 1, maxWidth: "48rem" }}>
+      {serbian && <ScriptToggle script={script} onChange={setScript} />}
       <Markdown
+        rehypePlugins={plugins}
         components={{
           a: ({ href, children }) =>
             href?.startsWith("/") ? (
