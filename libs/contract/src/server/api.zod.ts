@@ -154,6 +154,15 @@ export const ProfileMaterialsCreateMaterialResponse = zod.object({
 })
 
 
+export const TeamListFlowsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.string().describe('Machine id in libs/flows.'),
+  "title": zod.string(),
+  "version": zod.int()
+}).describe('One Processing scenario; the diagram itself is drawn from libs/flows.'))
+})
+
+
 export const WorkerClaimJobHeader = zod.object({
   "x-worker-protocol": zod.string()
 })

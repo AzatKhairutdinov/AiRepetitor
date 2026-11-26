@@ -6,6 +6,7 @@ import { MaterialCard } from "./screens/MaterialCard.tsx";
 import { ProfileHome } from "./screens/ProfileHome.tsx";
 import { ProfileLayout } from "./screens/ProfileLayout.tsx";
 import { SignIn } from "./screens/SignIn.tsx";
+import { TeamFlows } from "./screens/TeamFlows.tsx";
 
 export function App() {
   const { data: session, isPending } = authClient.useSession();
@@ -17,6 +18,7 @@ export function App() {
     <Routes>
       <Route path="/" element={<ChooseProfile />} />
       <Route path="/languages" element={<ChooseLanguage />} />
+      <Route path="/team/flows" element={<TeamFlows />} />
       <Route path="/profiles/:profileId" element={<ProfileLayout />}>
         <Route index element={<ProfileHome />} />
         <Route path="materials/:materialId" element={<MaterialCard />} />

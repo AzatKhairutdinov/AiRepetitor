@@ -53,8 +53,8 @@ export const materialProcessing = setup({
       entry: "enqueueExtraction",
       on: { SOURCE_DONE: { actions: "recordSource" } },
       always: [
-        { guard: "noneExtracted", target: "failed" },
-        { guard: "allFinished", target: "textsReady" },
+        { guard: "noneExtracted", target: "failed", description: "ни один Исходник не прочитан" },
+        { guard: "allFinished", target: "textsReady", description: "все Исходники обработаны" },
       ],
     },
     textsReady: {

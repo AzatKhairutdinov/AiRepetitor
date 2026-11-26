@@ -161,6 +161,24 @@ export interface CreatedMaterial {
   uploads: SourceUpload[];
 }
 
+/**
+ * One Processing scenario; the diagram itself is drawn from libs/flows.
+ */
+export interface FlowSummary {
+  /** Machine id in libs/flows. */
+  id: string;
+  title: string;
+  version: number;
+}
+
+export interface FlowList {
+  items: FlowSummary[];
+}
+
+export interface ForbiddenError {
+  message: string;
+}
+
 export type HealthStatus = typeof HealthStatus[keyof typeof HealthStatus];
 
 

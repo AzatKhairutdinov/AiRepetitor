@@ -30,7 +30,11 @@ export const sourceExtraction = setup({
     },
     leased: {
       meta: { owner: "worker", title: "Извлекается" } satisfies StateMeta,
-      on: { SUCCEED: "extracted", FAIL: "failed", LEASE_EXPIRED: "queued" },
+      on: {
+        SUCCEED: "extracted",
+        FAIL: "failed",
+        LEASE_EXPIRED: { target: "queued", description: "аренда истекла" },
+      },
     },
     extracted: {
       type: "final",

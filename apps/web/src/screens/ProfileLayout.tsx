@@ -1,4 +1,8 @@
-import { profileMaterialsListMaterials, profilesGetProfile } from "@airepetitor/contract/client";
+import {
+  profileMaterialsListMaterials,
+  profilesGetProfile,
+  teamListFlows,
+} from "@airepetitor/contract/client";
 import { useCallback, useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate, useOutletContext, useParams } from "react-router";
 import type { MaterialSummary, Profile } from "../../../../libs/contract/src/client/api.schemas.ts";
@@ -21,6 +25,14 @@ export function ProfileLayout() {
   const [materials, setMaterials] = useState<MaterialSummary[]>([]);
   const [missing, setMissing] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [team, setTeam] = useState(false);
+
+  // The Team menu item shows only when the Team endpoint lets this account in.
+  useEffect(() => {
+    teamListFlows()
+      .then((res) => setTeam(res.status === 200))
+      .catch(() => setTeam(false));
+  }, []);
 
   const reloadMaterials = useCallback(async () => {
     const res = await profileMaterialsListMaterials(profileId);
@@ -51,6 +63,11 @@ export function ProfileLayout() {
       <nav style={{ minWidth: "14rem" }}>
         <h1>{profile.name}</h1>
         <Link to="/">Сменить язык</Link>
+        {team && (
+          <p>
+            <Link to="/team/flows">Схемы процессов</Link>
+          </p>
+        )}
         <p>
           <button type="button" onClick={context.openUpload}>
             Загрузить материал

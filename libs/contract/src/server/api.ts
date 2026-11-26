@@ -18,6 +18,7 @@ import { profilesCreateProfileHandlers } from '../../../../apps/api/src/handlers
 import { profilesGetProfileHandlers } from '../../../../apps/api/src/handlers/profilesGetProfile';
 import { profileMaterialsListMaterialsHandlers } from '../../../../apps/api/src/handlers/profileMaterialsListMaterials';
 import { profileMaterialsCreateMaterialHandlers } from '../../../../apps/api/src/handlers/profileMaterialsCreateMaterial';
+import { teamListFlowsHandlers } from '../../../../apps/api/src/handlers/teamListFlows';
 import { workerClaimJobHandlers } from '../../../../apps/api/src/handlers/workerClaimJob';
 import { workerCompleteJobHandlers } from '../../../../apps/api/src/handlers/workerCompleteJob';
 
@@ -54,6 +55,9 @@ const app = new Hono()
  */
 
   .post('/profiles/:profileId/materials', ...profileMaterialsCreateMaterialHandlers)
+
+
+  .get('/team/flows', ...teamListFlowsHandlers)
 
 /**
  * Leases the next job; 204 when there is none.
