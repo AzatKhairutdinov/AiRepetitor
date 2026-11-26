@@ -1,11 +1,10 @@
 //! Client of the worker protocol: `claim` and `complete` (ADR 0003).
 
-use crate::vision::Usage;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Must match `WORKER_PROTOCOL` in the API.
-pub const PROTOCOL: &str = "3";
+pub const PROTOCOL: &str = "4";
 
 #[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -28,7 +27,42 @@ pub struct Job {
     pub write_text: WriteLink,
     /// PDF and images: the vision model instruction of the Processing's Playbook edition.
     pub vision_prompt: Option<String>,
-    // Media fields (duration, audio link) are read by the media ticket.
+    /// Audio and video: where to PUT the extracted audio track (Opus in Ogg).
+    pub write_audio: Option<WriteLink>,
+}
+
+/// What one model spent on a job; the API prices it and adds it to the Processing cost.
+#[derive(Debug, Serialize, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Usage {
+    pub model: String,
+    #[serde(skip_serializing_if = "is_zero")]
+    pub input_tokens: u64,
+    #[serde(skip_serializing_if = "is_zero")]
+    pub output_tokens: u64,
+    /// Minute-priced models (speech recognition).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub audio_minutes: Option<f64>,
+}
+
+impl Usage {
+    pub fn new(model: &str) -> Self {
+        Self {
+            model: model.to_owned(),
+            input_tokens: 0,
+            output_tokens: 0,
+            audio_minutes: None,
+        }
+    }
+
+    /// True when there is anything to bill.
+    pub fn is_spent(&self) -> bool {
+        self.input_tokens + self.output_tokens > 0 || self.audio_minutes.is_some_and(|m| m > 0.0)
+    }
+}
+
+fn is_zero(n: &u64) -> bool {
+    *n == 0
 }
 
 #[derive(Debug, Serialize, PartialEq)]

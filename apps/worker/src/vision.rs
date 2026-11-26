@@ -1,30 +1,16 @@
 //! Text out of one picture through a vision model on the OpenAI-compatible API.
 
+use crate::api::Usage;
+use crate::provider::{CallError, clip, send_json, with_retries};
 use base64::Engine;
-use serde::Serialize;
 use serde_json::json;
 use std::time::Duration;
 
-/// Pauses before the 1st, 2nd and 3rd retry of a provider error.
-const RETRY_PAUSES: [Duration; 3] = [
-    Duration::from_secs(1),
-    Duration::from_secs(4),
-    Duration::from_secs(16),
-];
 /// The model's answer when the picture has no readable text (the Playbook asks for exactly this).
 const UNREADABLE: &str = "UNREADABLE";
 /// A dense page of handwriting stays well under this.
 const MAX_TOKENS: u32 = 8192;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(180);
-
-/// Tokens of one model, reported to the API in `complete`.
-#[derive(Debug, Serialize, Clone, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct Usage {
-    pub model: String,
-    pub input_tokens: u64,
-    pub output_tokens: u64,
-}
 
 #[derive(Debug, PartialEq)]
 pub enum Reading {
@@ -50,8 +36,13 @@ impl Vision {
         }
     }
 
+    /// An empty record of what this model spent.
+    pub fn usage(&self) -> Usage {
+        Usage::new(&self.model)
+    }
+
     /// Reads one JPEG. Err carries the last provider error after all retries.
-    /// Every answered call adds its tokens to `usage`, failed or not.
+    /// The successful call adds its tokens to `usage`; answers that are retried are not counted.
     pub async fn read(
         &self,
         prompt: &str,
@@ -74,66 +65,36 @@ impl Vision {
                 ],
             }],
         });
-        let mut last_error = String::new();
-        for attempt in 0..=RETRY_PAUSES.len() {
-            if attempt > 0 {
-                tokio::time::sleep(RETRY_PAUSES[attempt - 1]).await;
-            }
-            match self.call(&body, usage).await {
-                Ok(text) => return Ok(classify(&text)),
-                Err(CallError::Final(e)) => return Err(format!("{}: {e}", self.model)),
-                Err(CallError::Retryable(e)) => last_error = e,
-            }
-        }
-        Err(format!("{}: {last_error}", self.model))
+        let (text, input, output) = with_retries(|| self.call(&body))
+            .await
+            .map_err(|e| format!("{}: {e}", self.model))?;
+        usage.input_tokens += input;
+        usage.output_tokens += output;
+        Ok(classify(&text))
     }
 
-    async fn call(&self, body: &serde_json::Value, usage: &mut Usage) -> Result<String, CallError> {
-        let res = self
-            .http
-            .post(format!("{}/chat/completions", self.base_url))
-            .bearer_auth(&self.api_key)
-            .timeout(REQUEST_TIMEOUT)
-            .json(body)
-            .send()
-            .await
-            .map_err(|e| CallError::Retryable(e.to_string()))?;
-        let status = res.status();
-        if !status.is_success() {
-            let text = res.text().await.unwrap_or_default();
-            let message = format!(
-                "HTTP {status}: {}",
-                text.chars().take(300).collect::<String>()
-            );
-            // The same rule as the API's model client: only rate limits and server errors pass.
-            return Err(if status.as_u16() == 429 || status.is_server_error() {
-                CallError::Retryable(message)
-            } else {
-                CallError::Final(message)
-            });
-        }
-        let answer: serde_json::Value = res
-            .json()
-            .await
-            .map_err(|e| CallError::Retryable(e.to_string()))?;
-        usage.input_tokens += answer["usage"]["prompt_tokens"].as_u64().unwrap_or(0);
-        usage.output_tokens += answer["usage"]["completion_tokens"].as_u64().unwrap_or(0);
+    async fn call(&self, body: &serde_json::Value) -> Result<(String, u64, u64), CallError> {
+        let answer = send_json(
+            self.http
+                .post(format!("{}/chat/completions", self.base_url))
+                .bearer_auth(&self.api_key)
+                .timeout(REQUEST_TIMEOUT)
+                .json(body),
+        )
+        .await?;
         let message = &answer["choices"][0]["message"];
         if !message.is_object() {
             return Err(CallError::Retryable(format!(
                 "no choices in the answer: {}",
-                answer.to_string().chars().take(300).collect::<String>()
+                clip(&answer.to_string())
             )));
         }
-        Ok(message["content"].as_str().unwrap_or_default().to_owned())
+        Ok((
+            message["content"].as_str().unwrap_or_default().to_owned(),
+            answer["usage"]["prompt_tokens"].as_u64().unwrap_or(0),
+            answer["usage"]["completion_tokens"].as_u64().unwrap_or(0),
+        ))
     }
-}
-
-enum CallError {
-    /// Network, rate limit, server error or a malformed answer: worth another try.
-    Retryable(String),
-    /// A client error such as a bad key or a rejected image: another try gives the same.
-    Final(String),
 }
 
 fn classify(answer: &str) -> Reading {

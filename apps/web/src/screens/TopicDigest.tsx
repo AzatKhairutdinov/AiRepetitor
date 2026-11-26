@@ -1,4 +1,5 @@
 import { getTopic } from "@airepetitor/contract/client";
+import { STORED_LABEL } from "@airepetitor/formats/source-labels";
 import { useEffect, useState } from "react";
 import Markdown from "react-markdown";
 import { Link, useParams } from "react-router";
@@ -6,12 +7,14 @@ import { ScriptToggle, rehypeCyrillic, useSerbianScript } from "../serbian/scrip
 import { useProfile } from "./ProfileLayout.tsx";
 import type { Topic } from "../../../../libs/contract/src/client/api.schemas.ts";
 
-/** `[[source:<id>]]` → a link to that Source text, named after its file. */
+/** `[[source:<id>]]` → a link to that Source text, named after its file; a time label leads to that moment. */
 function withSourceLinks(topic: Topic): string {
   const names = new Map(topic.sources.map((s) => [s.sourceId, s.fileName]));
-  return (topic.digest?.markdown ?? "").replace(/\[\[source:([\w-]+)\]\]/g, (_, id: string) => {
+  return (topic.digest?.markdown ?? "").replace(STORED_LABEL, (_, id: string, at?: string) => {
     const name = names.get(id);
-    return name ? `[${name}](/profiles/${topic.profileId}/sources/${id})` : "";
+    if (!name) return "";
+    const href = `/profiles/${topic.profileId}/sources/${id}`;
+    return at ? `[${name}, ${at}](${href}#t=${at})` : `[${name}](${href})`;
   });
 }
 

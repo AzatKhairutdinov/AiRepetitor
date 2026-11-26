@@ -1,5 +1,6 @@
 // One OpenAI-compatible Chat Completions client for every model. Only the common minimum:
 // messages, temperature, response_format json_object.
+import { costMicroUsd } from "./prices.ts";
 
 export interface ModelConfig {
   baseUrl: string;
@@ -23,26 +24,8 @@ export interface ChatResult {
 /** The provider did not answer after all retries. */
 class ModelUnavailable extends Error {}
 
-/** Dollars per million tokens. Unknown models cost 0 and are logged. */
-const PRICES: Readonly<Record<string, { input: number; output: number }>> = {
-  "deepseek-ai/DeepSeek-V4.1-Flash": { input: 0.2, output: 0.6 },
-  "Qwen/Qwen3.5-397B-A17B": { input: 0.45, output: 3.0 },
-  "Qwen/Qwen3-VL-30B-A3B-Instruct": { input: 0.15, output: 0.6 },
-};
-
 /** Pauses before the 1st, 2nd and 3rd retry. */
 const RETRY_PAUSES_MS = [1000, 4000, 16000];
-
-/** Cost of one call in millionths of a dollar; also prices the worker's vision calls. */
-export function costMicroUsd(model: string, inputTokens: number, outputTokens: number): number {
-  const price = PRICES[model];
-  if (!price) {
-    console.warn("No price for model", model);
-    return 0;
-  }
-  // $ per million tokens × tokens = millionths of a dollar.
-  return Math.round(price.input * inputTokens + price.output * outputTokens);
-}
 
 const retryable = (status: number) => status === 429 || status >= 500;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));

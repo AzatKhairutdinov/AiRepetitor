@@ -53,14 +53,17 @@ impl Config {
         })
     }
 
-    /// Source kinds this worker can extract now. PDFs and images need the model key (a PDF may
-    /// turn out to be a scan) and PDFs also need pdfium. Media arrives with its own ticket.
-    pub fn kinds(&self, has_pdfium: bool) -> Vec<&'static str> {
+    /// Source kinds this worker can extract now. Pictures, PDFs and recordings need the model key
+    /// (a PDF may turn out to be a scan); PDFs also need pdfium, recordings ffmpeg and ffprobe.
+    pub fn kinds(&self, has_pdfium: bool, has_ffmpeg: bool) -> Vec<&'static str> {
         let mut kinds = vec!["document"];
         if self.deepinfra_api_key.is_some() {
             kinds.push("image");
             if has_pdfium {
                 kinds.push("pdf");
+            }
+            if has_ffmpeg {
+                kinds.extend(["audio", "video"]);
             }
         }
         kinds

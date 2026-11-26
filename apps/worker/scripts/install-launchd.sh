@@ -12,6 +12,12 @@ bin="$bin_dir/airepetitor-worker"
 plist="$HOME/Library/LaunchAgents/$label.plist"
 log_dir="$HOME/Library/Logs/AiRepetitor"
 
+for tool in ffmpeg ffprobe; do
+  if ! command -v "$tool" >/dev/null; then
+    echo "$tool is not in PATH; recordings need it. Install it with: brew install ffmpeg" >&2
+    exit 1
+  fi
+done
 command -v pandoc >/dev/null || echo "note: pandoc is not in PATH; the fallback for documents needs it (brew install pandoc)"
 bash "$repo/apps/worker/scripts/install-pdfium.sh"
 
@@ -27,10 +33,11 @@ if [ ! -f "$env_file" ]; then
 API_URL=http://localhost:8787
 # The same value as WORKER_TOKEN in apps/api/.dev.vars
 WORKER_TOKEN=
-# Optional: without it the worker takes only documents.
+# Optional: without it the worker takes only documents (no photos, PDFs or recordings).
 DEEPINFRA_API_KEY=
 # Optional: vision model id on the provider and the OpenAI-compatible base URL.
 # VISION_MODEL=Qwen/Qwen3-VL-30B-A3B-Instruct
+# ASR_MODEL=openai/whisper-large-v3-turbo
 # MODEL_BASE_URL=https://api.deepinfra.com/v1/openai
 ENV
   echo "created $env_file — fill in WORKER_TOKEN, then run this script again"

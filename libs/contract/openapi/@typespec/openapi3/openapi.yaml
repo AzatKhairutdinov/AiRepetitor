@@ -840,8 +840,6 @@ components:
       type: object
       required:
         - model
-        - inputTokens
-        - outputTokens
       properties:
         model:
           type: string
@@ -849,10 +847,15 @@ components:
         inputTokens:
           type: integer
           format: int64
+          description: Token-priced models (vision).
         outputTokens:
           type: integer
           format: int64
-      description: Tokens one model spent on a job; the API prices them and adds the cost to the Processing.
+        audioMinutes:
+          type: number
+          format: double
+          description: 'Minute-priced models (speech recognition): minutes of audio transcribed.'
+      description: What one model spent on a job; the API prices it and adds the cost to the Processing.
     NewSource:
       type: object
       required:
