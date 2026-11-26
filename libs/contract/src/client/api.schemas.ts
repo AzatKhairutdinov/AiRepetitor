@@ -46,6 +46,16 @@ export const JobOutcome = {
   failure: 'failure',
 } as const;
 
+/**
+ * Tokens one model spent on a job; the API prices them and adds the cost to the Processing.
+ */
+export interface ModelUsage {
+  /** Model id as sent to the provider. */
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+}
+
 export interface CompleteJobRequest {
   attempt: number;
   outcome: JobOutcome;
@@ -57,6 +67,8 @@ export interface CompleteJobRequest {
   code?: string;
   /** Failure: the reason in Russian, shown to the Learner. */
   reason?: string;
+  /** Model calls of this attempt, on success and on failure alike. */
+  usage?: ModelUsage[];
 }
 
 export interface ConflictError {
@@ -356,5 +368,7 @@ export interface WorkerJob {
   writeText: WriteLink;
   /** Audio and video only: where to PUT the extracted audio track (Opus in Ogg). */
   writeAudio?: WriteLink;
+  /** PDF and images only: the vision model instruction from the Processing's Playbook edition. */
+  visionPrompt?: string;
 }
 

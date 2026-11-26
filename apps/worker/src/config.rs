@@ -10,9 +10,13 @@ pub struct Config {
     pub worker_token: String,
     /// Key for the OpenAI-compatible model provider; without it only model-free jobs are taken.
     pub deepinfra_api_key: Option<String>,
+    /// OpenAI-compatible base URL, without `/chat/completions`.
+    pub model_base_url: String,
     pub vision_model: String,
     pub asr_model: String,
     pub log_dir: PathBuf,
+    /// pdfium shared library downloaded by `scripts/install-pdfium.sh`.
+    pub pdfium_library: PathBuf,
 }
 
 impl Config {
@@ -28,6 +32,8 @@ impl Config {
                 .to_owned(),
             worker_token,
             deepinfra_api_key: non_empty("DEEPINFRA_API_KEY"),
+            model_base_url: non_empty("MODEL_BASE_URL")
+                .unwrap_or_else(|| "https://api.deepinfra.com/v1/openai".to_owned()),
             vision_model: non_empty("VISION_MODEL")
                 .unwrap_or_else(|| "Qwen/Qwen3-VL-30B-A3B-Instruct".to_owned()),
             asr_model: non_empty("ASR_MODEL")
@@ -35,13 +41,29 @@ impl Config {
             log_dir: non_empty("LOG_DIR")
                 .map(PathBuf::from)
                 .unwrap_or_else(|| home.join("Library/Logs/AiRepetitor")),
+            pdfium_library: non_empty("PDFIUM_LIBRARY")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| {
+                    home.join(".local/lib/airepetitor").join(format!(
+                        "{}pdfium{}",
+                        env::consts::DLL_PREFIX,
+                        env::consts::DLL_SUFFIX
+                    ))
+                }),
         })
     }
 
-    /// Source kinds this worker can extract now.
-    pub fn kinds(&self) -> Vec<&'static str> {
-        // Images, scans and media arrive with their own tickets and need the model key.
-        vec!["document"]
+    /// Source kinds this worker can extract now. PDFs and images need the model key (a PDF may
+    /// turn out to be a scan) and PDFs also need pdfium. Media arrives with its own ticket.
+    pub fn kinds(&self, has_pdfium: bool) -> Vec<&'static str> {
+        let mut kinds = vec!["document"];
+        if self.deepinfra_api_key.is_some() {
+            kinds.push("image");
+            if has_pdfium {
+                kinds.push("pdf");
+            }
+        }
+        kinds
     }
 }
 

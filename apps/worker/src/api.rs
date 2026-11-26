@@ -1,10 +1,11 @@
 //! Client of the worker protocol: `claim` and `complete` (ADR 0003).
 
+use crate::vision::Usage;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Must match `WORKER_PROTOCOL` in the API.
-pub const PROTOCOL: &str = "2";
+pub const PROTOCOL: &str = "3";
 
 #[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -25,6 +26,8 @@ pub struct Job {
     pub lease_expires_at: String,
     pub read_url: String,
     pub write_text: WriteLink,
+    /// PDF and images: the vision model instruction of the Processing's Playbook edition.
+    pub vision_prompt: Option<String>,
     // Media fields (duration, audio link) are read by the media ticket.
 }
 
@@ -102,9 +105,19 @@ impl Api {
         }
     }
 
-    pub async fn complete(&self, job: &Job, outcome: &Outcome) -> Result<(), ApiError> {
+    /// Reports the result with the model tokens spent on it, so the API adds their cost.
+    pub async fn complete(
+        &self,
+        job: &Job,
+        outcome: &Outcome,
+        usage: &[Usage],
+    ) -> Result<(), ApiError> {
         let mut body = serde_json::to_value(outcome).map_err(|e| ApiError::Other(e.to_string()))?;
         body["attempt"] = job.attempt.into();
+        if !usage.is_empty() {
+            body["usage"] =
+                serde_json::to_value(usage).map_err(|e| ApiError::Other(e.to_string()))?;
+        }
         let res = self
             .post(&format!("/worker/jobs/{}/complete", job.job_id))
             .json(&body)

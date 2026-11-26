@@ -51,7 +51,8 @@ pub async fn extract(bytes: Vec<u8>, file_name: &str, mime: &str) -> Result<Extr
     }
 }
 
-async fn with_xberg(bytes: Vec<u8>, file_name: &str, mime: &str) -> Result<String, String> {
+/// xberg alone, as Markdown; PDFs use it for their text layer.
+pub async fn with_xberg(bytes: Vec<u8>, file_name: &str, mime: &str) -> Result<String, String> {
     let config: xberg::ExtractionConfig =
         serde_json::from_value(serde_json::json!({ "output_format": "markdown" }))
             .map_err(|e| e.to_string())?;

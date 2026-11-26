@@ -9,6 +9,7 @@
 - `tutor/revise.md` — инструкция Репетитора «правка Конспекта».
 - `tutor/digest-update.md` — инструкция Репетитора «новая версия Конспекта».
 - `methodologist/digest.md`, `methodologist/digest-update.md`, `methodologist/topics.md` — инструкции Методиста.
+- `worker/vision.md` — инструкция vision-модели: переписать текст с фото или страницы скана. Worker получает её в задании.
 - `checks.yaml` — Проверки кодом; схема — модель `CodeChecks` в `specs/main.tsp`.
 - Глоссарий — `GLOSSARY.md` в корне репозитория, входит в Методичку как есть.
 
