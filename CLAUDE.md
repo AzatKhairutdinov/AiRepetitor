@@ -8,6 +8,10 @@ Issues are tracked in GitHub Issues (AzatKhairutdinov/AiRepetitor) via the `gh` 
 
 Single-context: one `GLOSSARY.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
+## Delivery flow
+
+Features go grill-with-docs → to-spec → to-tickets → implement, one stage per command the user types. See `.claude/rules/delivery-flow.md`.
+
 ## Quality gates and generated code
 
 - One check command: `mise run check`. Fix with `mise run fix`. Regenerate contract code with `mise run generate`.
