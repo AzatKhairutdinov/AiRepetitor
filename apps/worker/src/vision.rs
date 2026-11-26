@@ -42,7 +42,7 @@ impl Vision {
     }
 
     /// Reads one JPEG. Err carries the last provider error after all retries.
-    /// Every answered call adds its tokens to `usage`.
+    /// The successful call adds its tokens to `usage`; answers that are retried are not counted.
     pub async fn read(
         &self,
         prompt: &str,

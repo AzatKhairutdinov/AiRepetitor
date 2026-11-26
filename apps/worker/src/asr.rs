@@ -4,7 +4,8 @@ use crate::api::Usage;
 use crate::provider::{CallError, clip, send_json, with_retries};
 use std::time::Duration;
 
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(300);
+/// A 10-minute chunk takes seconds; a long wait here eats the lease (30 minutes per hour of media).
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// One recognised phrase; times in seconds from the start of the chunk.
 pub struct Segment {

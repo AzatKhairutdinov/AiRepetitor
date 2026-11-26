@@ -28,7 +28,7 @@ const UPGRADE_PAUSE: Duration = Duration::from_secs(10 * 60);
 /// Learner-facing reasons of a failed Source.
 const PHOTO_UNREADABLE: &str = "не удалось прочитать фото: текст не разобрать";
 const PHOTO_FORMAT: &str = "формат фото не читается";
-const VISION_UNAVAILABLE: &str = "временная ошибка распознавания";
+const MODEL_UNAVAILABLE: &str = "временная ошибка распознавания";
 const PDF_UNREADABLE: &str = "не удалось прочитать PDF";
 const MEDIA_UNREADABLE: &str = "не удалось прочитать запись";
 const MEDIA_TOO_LONG: &str = "запись длиннее 2 часов";
@@ -204,7 +204,14 @@ impl Worker {
                         }
                         Some(true)
                     }
-                    _ => None,
+                    (Some(_), None) => {
+                        self.log.error(
+                            "the job has no writeAudio link; the audio track is not saved",
+                            json!({ "ids": ids }),
+                        );
+                        None
+                    }
+                    (None, _) => None,
                 };
                 if let Err(e) =
                     upload(&self.http, &job.write_text, text.markdown.into_bytes()).await
@@ -252,14 +259,14 @@ impl Worker {
         let vision = self.vision.as_ref().ok_or_else(|| {
             Failure::new(
                 "no_model_key",
-                VISION_UNAVAILABLE,
+                MODEL_UNAVAILABLE,
                 "DEEPINFRA_API_KEY is not set",
             )
         })?;
         let prompt = job.vision_prompt.as_deref().ok_or_else(|| {
             Failure::new(
                 "no_vision_prompt",
-                VISION_UNAVAILABLE,
+                MODEL_UNAVAILABLE,
                 "the job has no visionPrompt",
             )
         })?;
@@ -276,7 +283,7 @@ impl Worker {
         let asr = self.asr.as_ref().ok_or_else(|| {
             Failure::new(
                 "no_model_key",
-                VISION_UNAVAILABLE,
+                MODEL_UNAVAILABLE,
                 "DEEPINFRA_API_KEY is not set",
             )
         })?;
@@ -316,7 +323,7 @@ impl Worker {
                 usage.audio_minutes = Some(minutes);
             }
             let segments =
-                segments.map_err(|e| Failure::new("asr_unavailable", VISION_UNAVAILABLE, e))?;
+                segments.map_err(|e| Failure::new("asr_unavailable", MODEL_UNAVAILABLE, e))?;
             lines.extend(
                 segments
                     .into_iter()
@@ -399,7 +406,7 @@ impl Worker {
         let pdfium = self
             .pdfium
             .clone()
-            .ok_or_else(|| Failure::new("no_pdfium", VISION_UNAVAILABLE, "pdfium is not loaded"))?;
+            .ok_or_else(|| Failure::new("no_pdfium", MODEL_UNAVAILABLE, "pdfium is not loaded"))?;
         let mut rendered = pdf::render_pages(pdfium, bytes);
         let mut parts = Vec::new();
         while let Some(event) = rendered.recv().await {
@@ -448,7 +455,7 @@ async fn read_picture(
             unreadable_reason(),
             "the model found no text",
         )),
-        Err(e) => Err(Failure::new("vision_unavailable", VISION_UNAVAILABLE, e)),
+        Err(e) => Err(Failure::new("vision_unavailable", MODEL_UNAVAILABLE, e)),
     }
 }
 

@@ -26,7 +26,7 @@ import { transitionRow } from "./flowStore.ts";
 import { instanceId } from "./queue.ts";
 
 /** Bump on any breaking change of the claim/complete protocol. */
-export const WORKER_PROTOCOL = "3";
+export const WORKER_PROTOCOL = "4";
 
 const LEASE_PER_MEDIA_HOUR_MS = 30 * 60 * 1000;
 const MIN_LEASE_MS = 30 * 60 * 1000;

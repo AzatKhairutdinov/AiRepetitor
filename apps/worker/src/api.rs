@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Must match `WORKER_PROTOCOL` in the API.
-pub const PROTOCOL: &str = "3";
+pub const PROTOCOL: &str = "4";
 
 #[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
