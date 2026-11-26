@@ -1,11 +1,12 @@
 import {
+  materialsDeleteMaterial,
   materialsGetMaterial,
   materialsListMessages,
   materialsRetryMaterial,
   retrySource,
 } from "@airepetitor/contract/client";
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 import { useProfile } from "./ProfileLayout.tsx";
 import type {
   Material,
@@ -25,10 +26,12 @@ export function MaterialCard() {
   const [material, setMaterial] = useState<Material | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [missing, setMissing] = useState(false);
-  const [retryError, setRetryError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   // Bumped after «Повторить» so polling starts again.
   const [round, setRound] = useState(0);
   const { reload } = useProfile();
+  const navigate = useNavigate();
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     setMaterial(null);
@@ -62,16 +65,33 @@ export function MaterialCard() {
 
   /** «Повторить»: the API answers with the Material back in the queue, or why it cannot. */
   const retry = async (request: () => ReturnType<typeof materialsRetryMaterial>) => {
-    setRetryError(null);
+    setActionError(null);
     try {
       const res = await request();
       if (res.status === 200) {
         setMaterial(res.data);
         setRound((r) => r + 1);
-      } else setRetryError(res.data.message);
+      } else setActionError(res.data.message);
     } catch {
-      setRetryError("Не удалось связаться с сервером, попробуйте ещё раз");
+      setActionError("Не удалось связаться с сервером, попробуйте ещё раз");
     }
+  };
+
+  /** Deletes the whole Material after a confirmation; Digests of its Topics stay. */
+  const remove = async (current: Material) => {
+    if (!window.confirm("Удалить материал? Конспекты тем останутся")) return;
+    setActionError(null);
+    setDeleting(true);
+    try {
+      const res = await materialsDeleteMaterial(current.id);
+      if (res.status === 204) {
+        reload();
+        void navigate(`/profiles/${current.profileId}`);
+      } else setActionError(res.data.message);
+    } catch {
+      setActionError("Не удалось связаться с сервером, попробуйте ещё раз");
+    }
+    setDeleting(false);
   };
 
   if (missing) return <main>Материал не найден.</main>;
@@ -91,7 +111,13 @@ export function MaterialCard() {
             Повторить
           </button>
         )}
-        {retryError && <p role="alert">{retryError}</p>}
+        {actionError && <p role="alert">{actionError}</p>}
+        {/* The API deletes only after Processing ended (409 otherwise). */}
+        {FINAL_STATUSES.has(material.status) && (
+          <button type="button" disabled={deleting} onClick={() => void remove(material)}>
+            Удалить материал
+          </button>
+        )}
         <section aria-label="Чат">
           {messages.length === 0 ? (
             <p>Репетитор ещё ничего не написал.</p>

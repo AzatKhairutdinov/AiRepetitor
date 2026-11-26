@@ -48,6 +48,13 @@ export const MaterialsGetMaterialResponse = zod.object({
 })
 
 
+export const MaterialsDeleteMaterialParams = zod.object({
+  "materialId": zod.string()
+})
+
+export const MaterialsDeleteMaterialResponse = zod.void()
+
+
 export const MaterialsListMessagesParams = zod.object({
   "materialId": zod.string()
 })

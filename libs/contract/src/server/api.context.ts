@@ -20,6 +20,11 @@ export type MaterialsGetMaterialContext<E extends Env = any> = Context<E, '/mate
  }, }, out: { param: {
  materialId: string,
  }, } }>
+export type MaterialsDeleteMaterialContext<E extends Env = any> = Context<E, '/materials/:materialId', { in: { param: {
+ materialId: string,
+ }, }, out: { param: {
+ materialId: string,
+ }, } }>
 export type MaterialsListMessagesContext<E extends Env = any> = Context<E, '/materials/:materialId/messages', { in: { param: {
  materialId: string,
  }, }, out: { param: {

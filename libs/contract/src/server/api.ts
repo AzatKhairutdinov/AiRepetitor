@@ -12,6 +12,7 @@ import {
 import { healthHandlers } from '../../../../apps/api/src/handlers/health';
 import { listLanguagesHandlers } from '../../../../apps/api/src/handlers/listLanguages';
 import { materialsGetMaterialHandlers } from '../../../../apps/api/src/handlers/materialsGetMaterial';
+import { materialsDeleteMaterialHandlers } from '../../../../apps/api/src/handlers/materialsDeleteMaterial';
 import { materialsListMessagesHandlers } from '../../../../apps/api/src/handlers/materialsListMessages';
 import { materialsRetryMaterialHandlers } from '../../../../apps/api/src/handlers/materialsRetryMaterial';
 import { materialsConfirmUploadHandlers } from '../../../../apps/api/src/handlers/materialsConfirmUpload';
@@ -38,6 +39,13 @@ const app = new Hono()
 
 
   .get('/materials/:materialId', ...materialsGetMaterialHandlers)
+
+/**
+ * Deletes the Material with its Sources, files, Chat and links to Topics; Topics and Digest
+ * versions stay. 409 while the Material waits for or goes through Processing.
+ */
+
+  .delete('/materials/:materialId', ...materialsDeleteMaterialHandlers)
 
 /**
  * The Chat of the Material, oldest Message first.

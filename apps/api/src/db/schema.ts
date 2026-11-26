@@ -45,6 +45,8 @@ export const material = sqliteTable("material", {
   playbookEdition: text("playbook_edition"),
   /** Sum of model calls during Processing, in millionths of a dollar. */
   costMicroUsd: integer("cost_micro_usd").default(0).notNull(),
+  /** When Processing ended successfully (topicsReady or noTopics); originals expire 7 days later. */
+  processedAt: integer("processed_at", { mode: "timestamp_ms" }),
   createdAt: integer("created_at", { mode: "timestamp_ms" })
     .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
     .notNull(),
@@ -66,6 +68,8 @@ export const source = sqliteTable("source", {
   errorReason: text("error_reason"),
   /** R2 key of the original file. */
   originalKey: text("original_key").notNull(),
+  /** Set when the expiry removed the original; the Source can no longer be extracted again. */
+  originalDeletedAt: integer("original_deleted_at", { mode: "timestamp_ms" }),
 });
 
 /** Text the system got out of a Source; the Tutor reads it, the Learner does not. */

@@ -249,6 +249,17 @@ interface Materials {
   @get
   getMaterial(@path materialId: string): Material | UnauthorizedError | NotFoundError;
 
+  /**
+   * Deletes the Material with its Sources, files, Chat and links to Topics; Topics and Digest
+   * versions stay. 409 while the Material waits for or goes through Processing.
+   */
+  @delete
+  deleteMaterial(@path materialId: string):
+    | NoContentResponse
+    | ConflictError
+    | UnauthorizedError
+    | NotFoundError;
+
   /** Called after every PUT finished: checks the files are in storage. */
   @route("/uploaded")
   @post

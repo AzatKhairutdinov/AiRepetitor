@@ -7,12 +7,15 @@ import { ScriptToggle, rehypeCyrillic, useSerbianScript } from "../serbian/scrip
 import { useProfile } from "./ProfileLayout.tsx";
 import type { Topic } from "../../../../libs/contract/src/client/api.schemas.ts";
 
-/** `[[source:<id>]]` → a link to that Source text, named after its file; a time label leads to that moment. */
+/**
+ * `[[source:<id>]]` → a link to that Source text, named after its file; a time label leads to that
+ * moment. A Source of a deleted Material is no longer listed: its label reads «материал удалён».
+ */
 function withSourceLinks(topic: Topic): string {
   const names = new Map(topic.sources.map((s) => [s.sourceId, s.fileName]));
   return (topic.digest?.markdown ?? "").replace(STORED_LABEL, (_, id: string, at?: string) => {
     const name = names.get(id);
-    if (!name) return "";
+    if (!name) return "_материал удалён_";
     const href = `/profiles/${topic.profileId}/sources/${id}`;
     return at ? `[${name}, ${at}](${href}#t=${at})` : `[${name}](${href})`;
   });
