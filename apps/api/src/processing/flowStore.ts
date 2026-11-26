@@ -1,4 +1,4 @@
-import { type FlowMachine, type PersistedFlow, stateMeta } from "@airepetitor/flows";
+import { type FlowMachine, type Owner, type PersistedFlow, stateMeta } from "@airepetitor/flows";
 import { drizzle } from "drizzle-orm/d1";
 import { flowTransition, materialFlow } from "../db/schema.ts";
 import type { Env } from "../env.ts";
@@ -14,9 +14,13 @@ interface Transition {
   event: string;
 }
 
-/** Log row for a transition; the owner is whoever carried out the state being left. */
+/**
+ * Log row for a transition; the owner is whoever carried out the state being left, or the
+ * Learner for «Повторить».
+ */
 export function transitionRow(t: Omit<Transition, "machineVersion">) {
   const ownerState = t.from?.value ?? t.to.value;
+  const owner: Owner = t.event === "RETRY" ? "learner" : stateMeta(t.machine, ownerState).owner;
   return {
     id: crypto.randomUUID(),
     materialId: t.materialId,
@@ -25,7 +29,7 @@ export function transitionRow(t: Omit<Transition, "machineVersion">) {
     machine: t.machine.id,
     fromState: t.from?.value ?? null,
     toState: t.to.value,
-    owner: stateMeta(t.machine, ownerState).owner,
+    owner,
     event: t.event,
   };
 }

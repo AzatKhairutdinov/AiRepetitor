@@ -253,7 +253,25 @@ interface Materials {
   @route("/uploaded")
   @post
   confirmUpload(@path materialId: string): Material | BadRequestError | UnauthorizedError | NotFoundError;
+
+  /**
+   * «Повторить» for a Material in «ошибка»: it goes back to the Profile queue and goes on from
+   * the failed step. When no Source was read, the failed Sources are extracted again.
+   * 409 when the Material is not in «ошибка».
+   */
+  @route("/retry")
+  @post
+  retryMaterial(@path materialId: string): Material | ConflictError | UnauthorizedError | NotFoundError;
 }
+
+/**
+ * «Повторить» for a Source in «ошибка» while its Material is in «ошибка»: the Source is extracted
+ * again and Processing goes on; Sources already read are not extracted again.
+ * Returns the Material; 409 when the Source or its Material is not in «ошибка».
+ */
+@route("/sources/{sourceId}/retry")
+@post
+op retrySource(@path sourceId: string): Material | ConflictError | UnauthorizedError | NotFoundError;
 
 // --- Topics and Digests ------------------------------------------------------
 

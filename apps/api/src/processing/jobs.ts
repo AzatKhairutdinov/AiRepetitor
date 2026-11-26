@@ -36,12 +36,17 @@ function leaseMs(durationSeconds: number | null): number {
 }
 
 type JobRow = typeof job.$inferSelect;
+type SourceRow = typeof source.$inferSelect;
 
 const persisted = (row: JobRow): PersistedFlow<SourceExtractionContext> => ({
   value: row.state,
-  context: { attempts: row.attempts },
-  status: row.state === "extracted" || row.state === "failed" ? "done" : "active",
+  context: { attempts: row.attempts, attemptsBase: row.attemptsBase },
+  // «Ошибка» is not final: it waits for «Повторить».
+  status: row.state === "extracted" ? "done" : "active",
 });
+
+/** Learner-facing reason when the leases kept expiring. */
+const LEASES_RAN_OUT = "не удалось обработать файл";
 
 function step(row: JobRow, event: SourceExtractionEvent) {
   const from = persisted(row);
@@ -52,31 +57,131 @@ function step(row: JobRow, event: SourceExtractionEvent) {
 const textKey = (materialId: string, sourceId: string) => `texts/${materialId}/${sourceId}.md`;
 const audioKey = (materialId: string, sourceId: string) => `audio/${materialId}/${sourceId}.ogg`;
 
-/** Creates one queued job per Source (idempotent, so a replayed Workflow step is harmless). */
-export async function enqueueExtraction(env: Env, materialId: string): Promise<void> {
+/**
+ * Queues one job per awaited Source: a new job, or a failed one sent back by «Повторить».
+ * Idempotent, so a replayed Workflow step is harmless.
+ */
+export async function enqueueExtraction(
+  env: Env,
+  materialId: string,
+  sourceIds: string[],
+): Promise<void> {
+  if (sourceIds.length === 0) return;
   const d = drizzle(env.DB);
-  const sources = await d
-    .select({ id: source.id })
-    .from(source)
-    .where(eq(source.materialId, materialId));
-  if (sources.length === 0) return;
+  const existing = await d.select().from(job).where(inArray(job.id, sourceIds));
+  const retried = existing.filter((row) => row.state === "failed");
   await d.batch([
     d
       .update(source)
       .set({ status: "queued" })
       .where(and(eq(source.materialId, materialId), eq(source.status, "uploaded"))),
-    ...sources.map((s) =>
+    ...sourceIds.map((id) =>
       d
         .insert(job)
-        .values({
-          id: s.id,
-          materialId,
-          state: "queued",
-          machineVersion: SOURCE_EXTRACTION_VERSION,
-        })
+        .values({ id, materialId, state: "queued", machineVersion: SOURCE_EXTRACTION_VERSION })
         .onConflictDoNothing(),
     ),
+    ...retried.flatMap((row) => {
+      const { from, to } = step(row, { type: "RETRY" });
+      return [
+        d
+          .update(job)
+          .set({
+            state: to.value,
+            attemptsBase: to.context.attemptsBase,
+            leaseExpiresAt: null,
+            machineVersion: SOURCE_EXTRACTION_VERSION,
+          })
+          .where(and(eq(job.id, row.id), eq(job.state, "failed"))),
+        d.update(source).set({ status: "queued", errorReason: null }).where(eq(source.id, row.id)),
+        d.insert(flowTransition).values(
+          transitionRow({
+            machine: sourceExtraction,
+            materialId,
+            sourceId: row.id,
+            from,
+            to,
+            event: "RETRY",
+          }),
+        ),
+      ];
+    }),
   ]);
+}
+
+/** Sources the Learner sent back with «Повторить»: queued again while their job is still failed. */
+export async function sourcesToRetry(env: Env, materialId: string): Promise<string[]> {
+  const rows = await drizzle(env.DB)
+    .select({ id: source.id })
+    .from(source)
+    .innerJoin(job, eq(job.id, source.id))
+    .where(
+      and(eq(source.materialId, materialId), eq(source.status, "queued"), eq(job.state, "failed")),
+    );
+  return rows.map((r) => r.id);
+}
+
+/**
+ * The Source's result as D1 has it, or null while the job is not finished. Workflow events are
+ * buffered, so a repeated wake from before «Повторить» must not count as the new result.
+ */
+export async function confirmSourceDone(
+  env: Env,
+  sourceId: string,
+): Promise<{ type: "SOURCE_DONE"; sourceId: string; ok: boolean } | null> {
+  const [row] = await drizzle(env.DB).select().from(job).where(eq(job.id, sourceId));
+  if (row?.state === "extracted") return { type: "SOURCE_DONE", sourceId, ok: true };
+  if (row?.state === "failed") return { type: "SOURCE_DONE", sourceId, ok: false };
+  return null;
+}
+
+/** Wakes the Material's Workflow with one Source's result. */
+async function wakeWorkflow(env: Env, materialId: string, sourceId: string, ok: boolean) {
+  const instance = await env.PROCESSING.get(instanceId(materialId));
+  await instance.sendEvent({
+    type: sourceDoneEventType(sourceId),
+    payload: { type: "SOURCE_DONE", sourceId, ok },
+  });
+}
+
+/** The lease expired once too often: the Source fails and its Workflow learns about it. */
+async function failExpired(env: Env, candidate: JobRow, src: SourceRow) {
+  const d = drizzle(env.DB);
+  const { from, to } = step(candidate, { type: "LEASE_EXPIRED" });
+  const taken = await d
+    .update(job)
+    .set({ state: to.value, leaseExpiresAt: null })
+    .where(
+      and(
+        eq(job.id, candidate.id),
+        eq(job.state, candidate.state),
+        eq(job.attempts, candidate.attempts),
+      ),
+    )
+    .run();
+  if (taken.meta.changes !== 1) return;
+  await d.batch([
+    d
+      .update(source)
+      .set({ status: "failed", errorReason: LEASES_RAN_OUT })
+      .where(eq(source.id, src.id)),
+    d.insert(flowTransition).values(
+      transitionRow({
+        machine: sourceExtraction,
+        materialId: src.materialId,
+        sourceId: src.id,
+        from,
+        to,
+        event: "LEASE_EXPIRED",
+      }),
+    ),
+  ]);
+  try {
+    await wakeWorkflow(env, src.materialId, src.id, false);
+  } catch (error) {
+    // Nobody retries this wake; the claim must still go on to the next job.
+    console.error("Could not wake the Workflow after the last lease", src.id, error);
+  }
 }
 
 /** Leases the oldest available job: queued, or leased with an expired lease. */
@@ -93,8 +198,9 @@ export async function claimJob(
     or(eq(job.state, "queued"), and(eq(job.state, "leased"), lt(job.leaseExpiresAt, now))),
   );
 
-  // A few tries in case another worker takes the same job between select and update.
-  for (let i = 0; i < 3; i++) {
+  // A few tries in case another worker takes the same job between select and update,
+  // or the oldest job turns out to have used up its leases.
+  for (let i = 0; i < 5; i++) {
     const [found] = await d
       .select({ job })
       .from(job)
@@ -109,6 +215,10 @@ export async function claimJob(
 
     const expired = candidate.state === "leased";
     const requeued = expired ? step(candidate, { type: "LEASE_EXPIRED" }).to : persisted(candidate);
+    if (requeued.value === "failed") {
+      await failExpired(env, candidate, src);
+      continue;
+    }
     const { to } = step({ ...candidate, state: requeued.value }, { type: "CLAIM" });
     const leaseExpiresAt = new Date(now.getTime() + leaseMs(src.durationSeconds));
 
@@ -181,13 +291,7 @@ export async function completeJob(
   if (!src) return "notFound";
 
   const ok = body.outcome === "success";
-  const wake = async () => {
-    const instance = await env.PROCESSING.get(instanceId(src.materialId));
-    await instance.sendEvent({
-      type: sourceDoneEventType(src.id),
-      payload: { type: "SOURCE_DONE", sourceId: src.id, ok },
-    });
-  };
+  const wake = () => wakeWorkflow(env, src.materialId, src.id, ok);
 
   // A retry of a complete that was already recorded: only wake the Workflow again.
   if (row.attempts === body.attempt && row.state === (ok ? "extracted" : "failed")) {

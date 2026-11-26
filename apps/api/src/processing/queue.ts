@@ -2,12 +2,16 @@
 // Different Profiles run in parallel.
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { material, profile } from "../db/schema.ts";
+import { RETRY_EVENT_TYPE } from "@airepetitor/flows";
+import { material, materialFlow, profile } from "../db/schema.ts";
 import type { Env } from "../env.ts";
 
 export const instanceId = (materialId: string) => `material-${materialId}`;
 
-/** Takes the Profile for its oldest queued Material, if the Profile is free, and starts its Workflow. */
+/**
+ * Takes the Profile for its oldest queued Material, if the Profile is free, and starts its
+ * Workflow. A Material back from «Повторить» already has one, waiting in «Ошибка»: it is woken.
+ */
 export async function startNextMaterial(env: Env, profileId: string): Promise<void> {
   const d = drizzle(env.DB);
   const [next] = await d
@@ -27,7 +31,16 @@ export async function startNextMaterial(env: Env, profileId: string): Promise<vo
 
   await d.update(material).set({ status: "processing" }).where(eq(material.id, next.id));
   try {
-    await env.PROCESSING.create({ id: instanceId(next.id), params: { materialId: next.id } });
+    const [flow] = await d
+      .select({ materialId: materialFlow.materialId })
+      .from(materialFlow)
+      .where(eq(materialFlow.materialId, next.id));
+    if (flow) {
+      const instance = await env.PROCESSING.get(instanceId(next.id));
+      await instance.sendEvent({ type: RETRY_EVENT_TYPE, payload: {} });
+    } else {
+      await env.PROCESSING.create({ id: instanceId(next.id), params: { materialId: next.id } });
+    }
   } catch (error) {
     // Put everything back so the next upload or finish tries again.
     await d.batch([
@@ -51,4 +64,14 @@ export async function finishMaterial(env: Env, materialId: string): Promise<void
     .set({ activeMaterialId: null })
     .where(and(eq(profile.id, row.profileId), eq(profile.activeMaterialId, materialId)));
   await startNextMaterial(env, row.profileId);
+}
+
+/** The queue gave this Material its Profile: it is the one being processed. */
+export async function holdsProfile(env: Env, materialId: string): Promise<boolean> {
+  const [row] = await drizzle(env.DB)
+    .select({ id: profile.id })
+    .from(profile)
+    .innerJoin(material, eq(material.profileId, profile.id))
+    .where(and(eq(material.id, materialId), eq(profile.activeMaterialId, materialId)));
+  return Boolean(row);
 }

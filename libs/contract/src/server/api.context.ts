@@ -20,6 +20,11 @@ export type MaterialsGetMaterialContext<E extends Env = any> = Context<E, '/mate
  }, }, out: { param: {
  materialId: string,
  }, } }>
+export type MaterialsRetryMaterialContext<E extends Env = any> = Context<E, '/materials/:materialId/retry', { in: { param: {
+ materialId: string,
+ }, }, out: { param: {
+ materialId: string,
+ }, } }>
 export type MaterialsConfirmUploadContext<E extends Env = any> = Context<E, '/materials/:materialId/uploaded', { in: { param: {
  materialId: string,
  }, }, out: { param: {
@@ -46,6 +51,11 @@ export type ListTopicsContext<E extends Env = any> = Context<E, '/profiles/:prof
  profileId: string,
  }, }, out: { param: {
  profileId: string,
+ }, } }>
+export type RetrySourceContext<E extends Env = any> = Context<E, '/sources/:sourceId/retry', { in: { param: {
+ sourceId: string,
+ }, }, out: { param: {
+ sourceId: string,
  }, } }>
 export type GetSourceTextContext<E extends Env = any> = Context<E, '/sources/:sourceId/text', { in: { param: {
  sourceId: string,

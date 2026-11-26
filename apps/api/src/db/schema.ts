@@ -88,6 +88,8 @@ export const job = sqliteTable("job", {
   state: text("state").notNull(),
   machineVersion: integer("machine_version").notNull(),
   attempts: integer("attempts").default(0).notNull(),
+  /** `attempts` at the last «Повторить»; a Source gets 3 leases counted from here. */
+  attemptsBase: integer("attempts_base").default(0).notNull(),
   leaseExpiresAt: integer("lease_expires_at", { mode: "timestamp_ms" }),
   createdAt: integer("created_at", { mode: "timestamp_ms" })
     .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)

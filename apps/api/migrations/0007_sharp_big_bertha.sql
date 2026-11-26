@@ -1,0 +1,1 @@
+ALTER TABLE `job` ADD `attempts_base` integer DEFAULT 0 NOT NULL;

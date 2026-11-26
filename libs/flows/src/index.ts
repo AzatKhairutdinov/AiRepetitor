@@ -1,4 +1,4 @@
-export type { Owner, StateMeta } from "./meta.ts";
+export { type Owner, type StateMeta, WAITS_FOR_LEARNER } from "./meta.ts";
 export type { ProposedTopic, ReviewError } from "./review.ts";
 export * from "./materialProcessing.ts";
 export * from "./sourceExtraction.ts";

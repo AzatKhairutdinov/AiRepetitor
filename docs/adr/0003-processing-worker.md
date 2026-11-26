@@ -6,4 +6,4 @@ Extracting text from Sources (ffmpeg on video up to 1 GB and 2 hours, document c
 
 **Considered options:** Cloudflare Queues pull consumers (messages live only 24 h on Free, so a laptop that is off for a weekend loses jobs); R2 event notifications (the Retry button creates no event); Cloudflare Containers right away ($5 a month for near-zero load).
 
-**Consequences:** a Material waits with status «В очереди» while the laptop is off. Leases expire after 30 minutes per hour of video and a Source gets at most 3 attempts. The worker is not tied to any Claude Code session.
+**Consequences:** a Material waits with status «В очереди» while the laptop is off. Leases expire after 30 minutes per hour of video and a Source gets at most 3 attempts; «Повторить» from the Learner gives it 3 more (attempt numbers keep growing, so a late `complete` stays a 409). The worker is not tied to any Claude Code session.

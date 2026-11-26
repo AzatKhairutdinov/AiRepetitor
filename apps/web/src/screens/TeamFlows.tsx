@@ -13,6 +13,7 @@ const OWNERS: Record<Owner, { label: string; color: string }> = {
   worker: { label: "worker", color: "#ffe8c2" },
   code: { label: "код", color: "#d8f3dc" },
   system: { label: "система", color: "#e9e9ef" },
+  learner: { label: "Ученик", color: "#fff3b0" },
 };
 
 const NODE_W = 200;

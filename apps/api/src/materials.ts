@@ -1,5 +1,12 @@
 import { checkFile } from "@airepetitor/formats";
-import { and, asc, desc, eq } from "drizzle-orm";
+import {
+  MATERIAL_PROCESSING_VERSION,
+  type MaterialProcessingContext,
+  type PersistedFlow,
+  advanceFlow,
+  materialProcessing,
+} from "@airepetitor/flows";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { type DrizzleD1Database, drizzle } from "drizzle-orm/d1";
 import type {
   CreateMaterialRequest,
@@ -12,7 +19,7 @@ import type {
   SourceStatus,
   TopicMark,
 } from "../../../libs/contract/src/server/api.schemas.ts";
-import { material, materialTopic, profile, source, topic } from "./db/schema.ts";
+import { material, materialFlow, materialTopic, profile, source, topic } from "./db/schema.ts";
 import type { Env } from "./env.ts";
 import { startNextMaterial } from "./processing/queue.ts";
 import type { Storage } from "./storage.ts";
@@ -195,4 +202,107 @@ export async function confirmUpload(
   }
   const [current] = await d.select().from(material).where(eq(material.id, materialId));
   return { ok: true, material: await withSources(d, current!) };
+}
+
+export type RetryResult =
+  | { ok: true; material: Material }
+  | { ok: false; error: "notFound" }
+  | { ok: false; error: "conflict"; message: string };
+
+const NOT_FAILED = "Повторить можно, только когда Материал в ошибке";
+
+/**
+ * The Processing snapshot when it waits in «Ошибка» for «Повторить», else null. A flow stored
+ * by an older machine version ended for good in «Ошибка» and cannot be woken.
+ */
+async function waitingFlow(d: DrizzleD1Database, row: MaterialRow) {
+  const [flow] = await d.select().from(materialFlow).where(eq(materialFlow.materialId, row.id));
+  if (!flow || flow.machineVersion !== MATERIAL_PROCESSING_VERSION) return null;
+  const snapshot = JSON.parse(flow.snapshot) as PersistedFlow<MaterialProcessingContext>;
+  return snapshot.value === "failed" ? snapshot : null;
+}
+
+/**
+ * Asks the machine what «Повторить» does and, if it goes on, marks the Sources it re-extracts
+ * and puts the Material back in the Profile queue (the queue wakes the waiting Workflow).
+ * The Workflow sends the same RETRY again, with the Sources marked here.
+ */
+async function retry(
+  env: Env,
+  d: DrizzleD1Database,
+  row: MaterialRow,
+  sourceIds: string[] | undefined,
+): Promise<RetryResult> {
+  const flow = row.status === "failed" ? await waitingFlow(d, row) : null;
+  if (!flow) return { ok: false, error: "conflict", message: NOT_FAILED };
+  const preview = advanceFlow(materialProcessing, flow, { type: "RETRY", sourceIds });
+  if (preview.snapshot.value === "failed") {
+    return { ok: false, error: "conflict", message: NOT_FAILED };
+  }
+  const reextract =
+    preview.snapshot.value === "extracting"
+      ? (preview.snapshot.context as MaterialProcessingContext).awaiting
+      : [];
+  if (sourceIds && reextract.length === 0) {
+    return {
+      ok: false,
+      error: "conflict",
+      message: "Темы уже разделены, этот файл в них не попадёт. Нажмите «Повторить» у Материала",
+    };
+  }
+  await d.batch([
+    d.update(material).set({ status: "queued", errorReason: null }).where(eq(material.id, row.id)),
+    ...(reextract.length > 0
+      ? [
+          d
+            .update(source)
+            .set({ status: "queued", errorReason: null })
+            .where(and(inArray(source.id, reextract), eq(source.status, "failed"))),
+        ]
+      : []),
+  ]);
+  try {
+    await startNextMaterial(env, row.profileId);
+  } catch (error) {
+    // The Material stays queued; the next upload or finish in this Profile wakes it.
+    console.error("Could not resume processing", row.id, error);
+  }
+  const [current] = await d.select().from(material).where(eq(material.id, row.id));
+  return { ok: true, material: await withSources(d, current!) };
+}
+
+/** «Повторить» for the Material: from the failed step, or all failed Sources when none was read. */
+export async function retryMaterial(
+  env: Env,
+  userId: string,
+  materialId: string,
+): Promise<RetryResult> {
+  const d = db(env);
+  const row = await ownedMaterial(d, userId, materialId);
+  if (!row) return { ok: false, error: "notFound" };
+  // A second press while the Material waits for its Profile changes nothing.
+  if (row.status === "queued" && (await waitingFlow(d, row))) {
+    return { ok: true, material: await withSources(d, row) };
+  }
+  return retry(env, d, row, undefined);
+}
+
+/** «Повторить» for one failed Source of a Material in «Ошибка». */
+export async function retrySource(
+  env: Env,
+  userId: string,
+  sourceId: string,
+): Promise<RetryResult> {
+  const d = db(env);
+  const [found] = await d
+    .select({ material, source })
+    .from(source)
+    .innerJoin(material, eq(material.id, source.materialId))
+    .innerJoin(profile, eq(profile.id, material.profileId))
+    .where(and(eq(source.id, sourceId), eq(profile.userId, userId)));
+  if (!found) return { ok: false, error: "notFound" };
+  if (found.source.status !== "failed") {
+    return { ok: false, error: "conflict", message: "Этот файл не в ошибке" };
+  }
+  return retry(env, d, found.material, [sourceId]);
 }
