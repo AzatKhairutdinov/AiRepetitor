@@ -6,6 +6,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { getPlatformProxy } from "wrangler";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import type { CreatedMaterial, WorkerJob } from "../../../libs/contract/src/server/api.schemas.ts";
 import type { Env } from "./env.ts";
 import app from "./index.ts";
 import { type ProcessingStep, runProcessing } from "./processing/run.ts";
@@ -339,10 +340,7 @@ async function upload(learner: Learner, profileId: string, files: string[]) {
     }),
   );
   expect(res.status).toBe(201);
-  const created = (await res.json()) as {
-    material: { id: string };
-    uploads: { sourceId: string; url: string; headers: Record<string, string> }[];
-  };
+  const created = (await res.json()) as CreatedMaterial;
   for (const u of created.uploads) {
     const put = await app.request(pathOf(u.url), putInit(u.headers), env);
     expect(put.status).toBeLessThan(300);
@@ -355,13 +353,7 @@ async function upload(learner: Learner, profileId: string, files: string[]) {
 
 // --- The worker ---------------------------------------------------------------------------------
 
-interface Job {
-  jobId: string;
-  fileName: string;
-  attempt: number;
-  readUrl: string;
-  writeText: { url: string; headers: Record<string, string> };
-}
+type Job = WorkerJob;
 
 const workerCall = (path: string, body: unknown, protocol = WORKER_PROTOCOL) =>
   app.request(
@@ -387,7 +379,13 @@ async function claim(): Promise<Job | null> {
   return (await res.json()) as Job;
 }
 
-async function complete(job: Job, outcome: "success" | string, attempt = job.attempt) {
+/** Reports a job: `"success"` uploads the text first, any other string is the failure reason. */
+async function complete(
+  job: Job,
+  outcome: "success" | string,
+  usage?: { model: string; inputTokens: number; outputTokens: number }[],
+) {
+  const { attempt } = job;
   if (outcome === "success") {
     const put = await app.request(pathOf(job.writeText.url), putInit(job.writeText.headers), env);
     expect(put.status).toBeLessThan(300);
@@ -395,7 +393,7 @@ async function complete(job: Job, outcome: "success" | string, attempt = job.att
   return workerCall(
     `/worker/jobs/${job.jobId}/complete`,
     outcome === "success"
-      ? { attempt, outcome: "success", method: "xberg" }
+      ? { attempt, outcome: "success", method: "vision", ...(usage ? { usage } : {}) }
       : { attempt, outcome: "failure", code: "unreadable_document", reason: outcome },
   );
 }
@@ -410,6 +408,10 @@ async function work(failing: Record<string, string> = {}) {
 }
 
 const materialOf = (learner: Learner, id: string) => learner.json(`/materials/${id}`);
+
+/** The Chat of a Material as its texts, oldest first. */
+const chatOf = async (learner: Learner, id: string): Promise<string[]> =>
+  (await learner.json(`/materials/${id}/messages`)).items.map((m: { text: string }) => m.text);
 
 // --- Scenarios ----------------------------------------------------------------------------------
 
@@ -508,7 +510,13 @@ describe("Обработка", () => {
     const learner = await signUp();
     const profileId = await profileOf(learner);
     const materialId = await upload(learner, profileId, ["lesson.txt"]);
-    await work();
+    // The worker read a scan with the vision model: 1500 + 20 tokens = 237 millionths of a dollar.
+    const job = (await claim())!;
+    const usage = [
+      { model: "Qwen/Qwen3-VL-30B-A3B-Instruct", inputTokens: 1500, outputTokens: 20 },
+    ];
+    expect((await complete(job, "success", usage)).status).toBe(204);
+    await workflows.settle();
 
     const material = await materialOf(learner, materialId);
     expect(material.status).toBe("topicsReady");
@@ -518,9 +526,7 @@ describe("Обработка", () => {
     expect(topic.digest.markdown).toContain(`[[source:${material.sources[0].id}]]`);
     expect(topic.sources).toEqual([expect.objectContaining({ fileName: "lesson.txt" })]);
 
-    const chat = (await learner.json(`/materials/${materialId}/messages`)).items.map(
-      (m: { text: string }) => m.text,
-    );
+    const chat = await chatOf(learner, materialId);
     expect(chat).toEqual([
       "Реплика: Материал принят",
       "Реплика: Исходник прочитан",
@@ -531,7 +537,12 @@ describe("Обработка", () => {
     const row = await env.DB.prepare("SELECT cost_micro_usd AS cost FROM material WHERE id = ?")
       .bind(materialId)
       .first<{ cost: number }>();
-    expect(row!.cost).toBeGreaterThan(0);
+    // Adds up: the worker's call plus every model call of the API, 1000 + 500 tokens each, by
+    // the price table (Tutor 0.2 / 0.6, Methodologist 0.45 / 3.0 dollars per million tokens).
+    const methodologist = models.calls.filter((r) => r.startsWith("review")).length;
+    const tutor = models.calls.length - methodologist;
+    expect(methodologist).toBeGreaterThan(0);
+    expect(row!.cost).toBe(237 + tutor * 500 + methodologist * 1950);
   });
 
   it("revises a draft that fails the Code Checks before the Methodologist sees it", async () => {
@@ -594,9 +605,7 @@ describe("Обработка", () => {
     expect(topic.digest.version).toBe(2);
     expect(topic.digest.markdown).toContain(`[[source:${first.sources[0].id}]]`);
     expect(topic.digest.markdown).toContain(`[[source:${second.sources[0].id}]]`);
-    const chat = (await learner.json(`/materials/${secondId}/messages`)).items.map(
-      (m: { text: string }) => m.text,
-    );
+    const chat = await chatOf(learner, secondId);
     expect(chat).toContain("Реплика: Тема дополнена");
   });
 
@@ -610,9 +619,7 @@ describe("Обработка", () => {
     expect(
       material.sources.find((s: { fileName: string }) => s.fileName === "bad.txt"),
     ).toMatchObject({ status: "failed", errorReason: "не удалось прочитать документ" });
-    const chat = (await learner.json(`/materials/${materialId}/messages`)).items.map(
-      (m: { text: string }) => m.text,
-    );
+    const chat = await chatOf(learner, materialId);
     expect(chat).toContain("Реплика: Исходник не прочитан");
   });
 
@@ -635,9 +642,7 @@ describe("Обработка", () => {
     await work();
 
     expect((await materialOf(learner, materialId)).status).toBe("noTopics");
-    const chat = (await learner.json(`/materials/${materialId}/messages`)).items.map(
-      (m: { text: string }) => m.text,
-    );
+    const chat = await chatOf(learner, materialId);
     expect(chat.at(-1)).toBe("Реплика: Без тем");
   });
 

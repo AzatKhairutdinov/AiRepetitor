@@ -404,3 +404,19 @@ fn a_recording_over_two_hours_is_refused() {
     assert_eq!(done["reason"], "запись длиннее 2 часов");
     assert_eq!(fake.state.lock().unwrap().model_calls, 0);
 }
+
+#[test]
+fn speech_recognition_errors_are_retried_three_times_then_fail_the_source() {
+    if !ffmpeg_or_skip() {
+        return;
+    }
+    let fake = Fake::start(Provider::Down);
+    let job = fake.add_job("audio", "lesson.ogg", "audio/ogg", recording(20, false));
+    // One chunk: four calls with pauses of 1, 4 and 16 seconds.
+    fake.run_worker(Duration::from_secs(90));
+
+    let done = fake.complete(&job);
+    assert_eq!(done["outcome"], "failure");
+    assert_eq!(done["reason"], "временная ошибка распознавания");
+    assert_eq!(fake.state.lock().unwrap().model_calls, 4);
+}
