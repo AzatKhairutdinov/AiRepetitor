@@ -5,6 +5,7 @@
   "type": "module",
   "dependencies": {
     "@airepetitor/contract": "workspace:*",
+    "@airepetitor/flows": "workspace:*",
     "@airepetitor/formats": "workspace:*",
     "@better-auth/drizzle-adapter": "^1.7.27",
     "aws4fetch": "^1.0.20",

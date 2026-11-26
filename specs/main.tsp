@@ -34,6 +34,12 @@ model BadRequestError {
 }
 
 @error
+model UpgradeRequiredError {
+  @statusCode _: 426;
+  message: string;
+}
+
+@error
 model UnauthorizedError {
   @statusCode _: 401;
   message: string;
@@ -183,13 +189,18 @@ model CreateMaterialRequest {
   sources: NewSource[];
 }
 
-/** Where the browser PUTs one file. */
-model SourceUpload {
-  sourceId: string;
+/** A signed link to PUT one object. */
+model WriteLink {
   url: string;
 
   /** Headers the PUT must carry. */
   headers: Record<string>;
+}
+
+/** Where the browser PUTs one file. */
+model SourceUpload {
+  sourceId: string;
+  ...WriteLink;
 }
 
 model CreatedMaterial {
@@ -219,4 +230,81 @@ interface Materials {
   @route("/uploaded")
   @post
   confirmUpload(@path materialId: string): Material | BadRequestError | UnauthorizedError | NotFoundError;
+}
+
+// --- Worker protocol (ADR 0003) ----------------------------------------------
+// The worker sends `authorization: Bearer <WORKER_TOKEN>` and `x-worker-protocol: <version>`.
+
+/** One Source to extract, leased to the worker until `leaseExpiresAt`. */
+model WorkerJob {
+  jobId: string;
+  sourceId: string;
+  kind: SourceKind;
+  mimeType: string;
+  fileName: string;
+  size: int64;
+  durationSeconds?: float64;
+
+  /** Attempt number; send it back in `complete`. */
+  attempt: int32;
+
+  leaseExpiresAt: utcDateTime;
+
+  /** Signed GET of the original file. */
+  readUrl: string;
+
+  /** Where to PUT the Source text (Markdown). */
+  writeText: WriteLink;
+
+  /** Audio and video only: where to PUT the extracted audio track (Opus in Ogg). */
+  writeAudio?: WriteLink;
+}
+
+union JobOutcome {
+  "success",
+  "failure",
+}
+
+model CompleteJobRequest {
+  attempt: int32;
+  outcome: JobOutcome;
+
+  /** Success: how the text was extracted, e.g. xberg, pandoc, whisper, vision. */
+  method?: string;
+
+  /** Success, audio and video: the audio track was saved through `writeAudio`. */
+  audioSaved?: boolean;
+
+  /** Failure: a machine-readable code. */
+  code?: string;
+
+  /** Failure: the reason in Russian, shown to the Learner. */
+  reason?: string;
+}
+
+@route("/worker")
+interface Worker {
+  /** Leases the next job; 204 when there is none. */
+  @route("/claim")
+  @post
+  claimJob(@header("x-worker-protocol") protocol: string):
+    | WorkerJob
+    | NoContentResponse
+    | UnauthorizedError
+    | UpgradeRequiredError;
+
+  /** Reports the result; 409 when the lease was lost to a newer attempt. */
+  @route("/jobs/{jobId}/complete")
+  @post
+  completeJob(
+    @header("x-worker-protocol") protocol: string,
+    @path jobId: string,
+    @body body: CompleteJobRequest,
+  ):
+    | NoContentResponse
+    | BadRequestError
+    | UnauthorizedError
+    | NotFoundError
+    | ConflictError
+    | UpgradeRequiredError;
 }

@@ -6,6 +6,7 @@
  */
 import type {
   BadRequestError,
+  CompleteJobRequest,
   ConflictError,
   CreateMaterialRequest,
   CreateProfileRequest,
@@ -17,7 +18,9 @@ import type {
   NotFoundError,
   Profile,
   ProfileList,
-  UnauthorizedError
+  UnauthorizedError,
+  UpgradeRequiredError,
+  WorkerJob
 } from './api.schemas.ts';
 
 
@@ -493,6 +496,137 @@ export const profileMaterialsCreateMaterial = async (profileId: string,
 
   const data: profileMaterialsCreateMaterialResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as profileMaterialsCreateMaterialResponse
+}
+
+
+
+export type workerClaimJobResponse200 = {
+  data: WorkerJob
+  status: 200
+}
+
+export type workerClaimJobResponse204 = {
+  data: void
+  status: 204
+}
+
+export type workerClaimJobResponse401 = {
+  data: UnauthorizedError
+  status: 401
+}
+
+export type workerClaimJobResponse426 = {
+  data: UpgradeRequiredError
+  status: 426
+}
+
+export type workerClaimJobResponseSuccess = (workerClaimJobResponse200 | workerClaimJobResponse204) & {
+  headers: Headers;
+};
+export type workerClaimJobResponseError = (workerClaimJobResponse401 | workerClaimJobResponse426) & {
+  headers: Headers;
+};
+
+export type workerClaimJobResponse = (workerClaimJobResponseSuccess | workerClaimJobResponseError)
+
+export const getWorkerClaimJobUrl = () => {
+
+
+
+
+  return `/worker/claim`
+}
+
+/**
+ * Leases the next job; 204 when there is none.
+ */
+export const workerClaimJob = async ( options?: RequestInit): Promise<workerClaimJobResponse> => {
+
+  const res = await fetch(getWorkerClaimJobUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: workerClaimJobResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as workerClaimJobResponse
+}
+
+
+
+export type workerCompleteJobResponse204 = {
+  data: void
+  status: 204
+}
+
+export type workerCompleteJobResponse400 = {
+  data: BadRequestError
+  status: 400
+}
+
+export type workerCompleteJobResponse401 = {
+  data: UnauthorizedError
+  status: 401
+}
+
+export type workerCompleteJobResponse404 = {
+  data: NotFoundError
+  status: 404
+}
+
+export type workerCompleteJobResponse409 = {
+  data: ConflictError
+  status: 409
+}
+
+export type workerCompleteJobResponse426 = {
+  data: UpgradeRequiredError
+  status: 426
+}
+
+export type workerCompleteJobResponseSuccess = (workerCompleteJobResponse204) & {
+  headers: Headers;
+};
+export type workerCompleteJobResponseError = (workerCompleteJobResponse400 | workerCompleteJobResponse401 | workerCompleteJobResponse404 | workerCompleteJobResponse409 | workerCompleteJobResponse426) & {
+  headers: Headers;
+};
+
+export type workerCompleteJobResponse = (workerCompleteJobResponseSuccess | workerCompleteJobResponseError)
+
+export const getWorkerCompleteJobUrl = (jobId: string,) => {
+
+
+
+
+  return `/worker/jobs/${jobId}/complete`
+}
+
+/**
+ * Reports the result; 409 when the lease was lost to a newer attempt.
+ */
+export const workerCompleteJob = async (jobId: string,
+    completeJobRequest: CompleteJobRequest, options?: RequestInit): Promise<workerCompleteJobResponse> => {
+
+  const res = await fetch(getWorkerCompleteJobUrl(jobId),
+  {
+    ...options,
+    method: 'POST',
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
+    body: JSON.stringify(completeJobRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: workerCompleteJobResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as workerCompleteJobResponse
 }
 
 

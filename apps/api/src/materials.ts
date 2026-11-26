@@ -13,6 +13,7 @@ import type {
 } from "../../../libs/contract/src/server/api.schemas.ts";
 import { material, profile, source } from "./db/schema.ts";
 import type { Env } from "./env.ts";
+import { startNextMaterial } from "./processing/queue.ts";
 import type { Storage } from "./storage.ts";
 
 /** A write link outlives a slow 1 GB upload. */
@@ -169,9 +170,17 @@ export async function confirmUpload(
       };
     }
   }
+  // Uploaded, then straight into the Profile queue.
   await d.batch([
     d.update(source).set({ status: "uploaded" }).where(eq(source.materialId, materialId)),
-    d.update(material).set({ status: "uploaded" }).where(eq(material.id, materialId)),
+    d.update(material).set({ status: "queued" }).where(eq(material.id, materialId)),
   ]);
-  return { ok: true, material: await withSources(d, { ...row, status: "uploaded" }) };
+  try {
+    await startNextMaterial(env, row.profileId);
+  } catch (error) {
+    // The Material stays queued; the next upload or finish in this Profile starts it.
+    console.error("Could not start processing", row.id, error);
+  }
+  const [current] = await d.select().from(material).where(eq(material.id, materialId));
+  return { ok: true, material: await withSources(d, current!) };
 }

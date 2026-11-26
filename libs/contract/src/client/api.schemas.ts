@@ -8,6 +8,27 @@ export interface BadRequestError {
   message: string;
 }
 
+export type JobOutcome = typeof JobOutcome[keyof typeof JobOutcome];
+
+
+export const JobOutcome = {
+  success: 'success',
+  failure: 'failure',
+} as const;
+
+export interface CompleteJobRequest {
+  attempt: number;
+  outcome: JobOutcome;
+  /** Success: how the text was extracted, e.g. xberg, pandoc, whisper, vision. */
+  method?: string;
+  /** Success, audio and video: the audio track was saved through `writeAudio`. */
+  audioSaved?: boolean;
+  /** Failure: a machine-readable code. */
+  code?: string;
+  /** Failure: the reason in Russian, shown to the Learner. */
+  reason?: string;
+}
+
 export interface ConflictError {
   message: string;
 }
@@ -192,5 +213,45 @@ export interface ProfileList {
 
 export interface UnauthorizedError {
   message: string;
+}
+
+export interface UpgradeRequiredError {
+  message: string;
+}
+
+/**
+ * Headers the PUT must carry.
+ */
+export type WriteLinkHeaders = {[key: string]: string};
+
+/**
+ * A signed link to PUT one object.
+ */
+export interface WriteLink {
+  url: string;
+  /** Headers the PUT must carry. */
+  headers: WriteLinkHeaders;
+}
+
+/**
+ * One Source to extract, leased to the worker until `leaseExpiresAt`.
+ */
+export interface WorkerJob {
+  jobId: string;
+  sourceId: string;
+  kind: SourceKind;
+  mimeType: string;
+  fileName: string;
+  size: number;
+  durationSeconds?: number;
+  /** Attempt number; send it back in `complete`. */
+  attempt: number;
+  leaseExpiresAt: string;
+  /** Signed GET of the original file. */
+  readUrl: string;
+  /** Where to PUT the Source text (Markdown). */
+  writeText: WriteLink;
+  /** Audio and video only: where to PUT the extracted audio track (Opus in Ogg). */
+  writeAudio?: WriteLink;
 }
 

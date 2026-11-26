@@ -230,6 +230,91 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateMaterialRequest'
+  /worker/claim:
+    post:
+      operationId: Worker_claimJob
+      description: Leases the next job; 204 when there is none.
+      parameters:
+        - name: x-worker-protocol
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkerJob'
+        '204':
+          description: There is no content to send for this request, but the headers may be useful.
+        '401':
+          description: Access is unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        '426':
+          description: Client error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpgradeRequiredError'
+  /worker/jobs/{jobId}/complete:
+    post:
+      operationId: Worker_completeJob
+      description: Reports the result; 409 when the lease was lost to a newer attempt.
+      parameters:
+        - name: x-worker-protocol
+          in: header
+          required: true
+          schema:
+            type: string
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: There is no content to send for this request, but the headers may be useful.
+        '400':
+          description: The server could not understand the request due to invalid syntax.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequestError'
+        '401':
+          description: Access is unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+        '409':
+          description: The request conflicts with the current state of the server.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConflictError'
+        '426':
+          description: Client error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpgradeRequiredError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteJobRequest'
 components:
   schemas:
     BadRequestError:
@@ -239,6 +324,29 @@ components:
       properties:
         message:
           type: string
+    CompleteJobRequest:
+      type: object
+      required:
+        - attempt
+        - outcome
+      properties:
+        attempt:
+          type: integer
+          format: int32
+        outcome:
+          $ref: '#/components/schemas/JobOutcome'
+        method:
+          type: string
+          description: 'Success: how the text was extracted, e.g. xberg, pandoc, whisper, vision.'
+        audioSaved:
+          type: boolean
+          description: 'Success, audio and video: the audio track was saved through `writeAudio`.'
+        code:
+          type: string
+          description: 'Failure: a machine-readable code.'
+        reason:
+          type: string
+          description: 'Failure: the reason in Russian, shown to the Learner.'
     ConflictError:
       type: object
       required:
@@ -285,6 +393,11 @@ components:
           type: string
           enum:
             - ok
+    JobOutcome:
+      type: string
+      enum:
+        - success
+        - failure
     Language:
       type: object
       required:
@@ -509,3 +622,73 @@ components:
       properties:
         message:
           type: string
+    UpgradeRequiredError:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+    WorkerJob:
+      type: object
+      required:
+        - jobId
+        - sourceId
+        - kind
+        - mimeType
+        - fileName
+        - size
+        - attempt
+        - leaseExpiresAt
+        - readUrl
+        - writeText
+      properties:
+        jobId:
+          type: string
+        sourceId:
+          type: string
+        kind:
+          $ref: '#/components/schemas/SourceKind'
+        mimeType:
+          type: string
+        fileName:
+          type: string
+        size:
+          type: integer
+          format: int64
+        durationSeconds:
+          type: number
+          format: double
+        attempt:
+          type: integer
+          format: int32
+          description: Attempt number; send it back in `complete`.
+        leaseExpiresAt:
+          type: string
+          format: date-time
+        readUrl:
+          type: string
+          description: Signed GET of the original file.
+        writeText:
+          allOf:
+            - $ref: '#/components/schemas/WriteLink'
+          description: Where to PUT the Source text (Markdown).
+        writeAudio:
+          allOf:
+            - $ref: '#/components/schemas/WriteLink'
+          description: 'Audio and video only: where to PUT the extracted audio track (Opus in Ogg).'
+      description: One Source to extract, leased to the worker until `leaseExpiresAt`.
+    WriteLink:
+      type: object
+      required:
+        - url
+        - headers
+      properties:
+        url:
+          type: string
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+          description: Headers the PUT must carry.
+      description: A signed link to PUT one object.
