@@ -12,6 +12,7 @@ import {
 import { healthHandlers } from '../../../../apps/api/src/handlers/health';
 import { listLanguagesHandlers } from '../../../../apps/api/src/handlers/listLanguages';
 import { materialsGetMaterialHandlers } from '../../../../apps/api/src/handlers/materialsGetMaterial';
+import { materialsRetryMaterialHandlers } from '../../../../apps/api/src/handlers/materialsRetryMaterial';
 import { materialsConfirmUploadHandlers } from '../../../../apps/api/src/handlers/materialsConfirmUpload';
 import { profilesListProfilesHandlers } from '../../../../apps/api/src/handlers/profilesListProfiles';
 import { profilesCreateProfileHandlers } from '../../../../apps/api/src/handlers/profilesCreateProfile';
@@ -19,6 +20,7 @@ import { profilesGetProfileHandlers } from '../../../../apps/api/src/handlers/pr
 import { profileMaterialsListMaterialsHandlers } from '../../../../apps/api/src/handlers/profileMaterialsListMaterials';
 import { profileMaterialsCreateMaterialHandlers } from '../../../../apps/api/src/handlers/profileMaterialsCreateMaterial';
 import { listTopicsHandlers } from '../../../../apps/api/src/handlers/listTopics';
+import { retrySourceHandlers } from '../../../../apps/api/src/handlers/retrySource';
 import { getSourceTextHandlers } from '../../../../apps/api/src/handlers/getSourceText';
 import { teamGetChecksHandlers } from '../../../../apps/api/src/handlers/teamGetChecks';
 import { teamListFlowsHandlers } from '../../../../apps/api/src/handlers/teamListFlows';
@@ -35,6 +37,14 @@ const app = new Hono()
 
 
   .get('/materials/:materialId', ...materialsGetMaterialHandlers)
+
+/**
+ * «Повторить» for a Material in «ошибка»: it goes back to the Profile queue and goes on from
+ * the failed step. When no Source was read, the failed Sources are extracted again.
+ * 409 when the Material is not in «ошибка».
+ */
+
+  .post('/materials/:materialId/retry', ...materialsRetryMaterialHandlers)
 
 /**
  * Called after every PUT finished: checks the files are in storage.
@@ -62,6 +72,14 @@ const app = new Hono()
 
 
   .get('/profiles/:profileId/topics', ...listTopicsHandlers)
+
+/**
+ * «Повторить» for a Source in «ошибка» while its Material is in «ошибка»: the Source is extracted
+ * again and Processing goes on; Sources already read are not extracted again.
+ * Returns the Material; 409 when the Source or its Material is not in «ошибка».
+ */
+
+  .post('/sources/:sourceId/retry', ...retrySourceHandlers)
 
 
   .get('/sources/:sourceId/text', ...getSourceTextHandlers)

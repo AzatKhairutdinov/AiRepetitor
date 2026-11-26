@@ -183,6 +183,68 @@ export const materialsGetMaterial = async (materialId: string, options?: Request
 
 
 
+export type materialsRetryMaterialResponse200 = {
+  data: Material
+  status: 200
+}
+
+export type materialsRetryMaterialResponse401 = {
+  data: UnauthorizedError
+  status: 401
+}
+
+export type materialsRetryMaterialResponse404 = {
+  data: NotFoundError
+  status: 404
+}
+
+export type materialsRetryMaterialResponse409 = {
+  data: ConflictError
+  status: 409
+}
+
+export type materialsRetryMaterialResponseSuccess = (materialsRetryMaterialResponse200) & {
+  headers: Headers;
+};
+export type materialsRetryMaterialResponseError = (materialsRetryMaterialResponse401 | materialsRetryMaterialResponse404 | materialsRetryMaterialResponse409) & {
+  headers: Headers;
+};
+
+export type materialsRetryMaterialResponse = (materialsRetryMaterialResponseSuccess | materialsRetryMaterialResponseError)
+
+export const getMaterialsRetryMaterialUrl = (materialId: string,) => {
+
+
+
+
+  return `/materials/${materialId}/retry`
+}
+
+/**
+ * «Повторить» for a Material in «ошибка»: it goes back to the Profile queue and goes on from
+ * the failed step. When no Source was read, the failed Sources are extracted again.
+ * 409 when the Material is not in «ошибка».
+ */
+export const materialsRetryMaterial = async (materialId: string, options?: RequestInit): Promise<materialsRetryMaterialResponse> => {
+
+  const res = await fetch(getMaterialsRetryMaterialUrl(materialId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: materialsRetryMaterialResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as materialsRetryMaterialResponse
+}
+
+
+
 export type materialsConfirmUploadResponse200 = {
   data: Material
   status: 200
@@ -555,6 +617,68 @@ export const listTopics = async (profileId: string, options?: RequestInit): Prom
 
   const data: listTopicsResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as listTopicsResponse
+}
+
+
+
+export type retrySourceResponse200 = {
+  data: Material
+  status: 200
+}
+
+export type retrySourceResponse401 = {
+  data: UnauthorizedError
+  status: 401
+}
+
+export type retrySourceResponse404 = {
+  data: NotFoundError
+  status: 404
+}
+
+export type retrySourceResponse409 = {
+  data: ConflictError
+  status: 409
+}
+
+export type retrySourceResponseSuccess = (retrySourceResponse200) & {
+  headers: Headers;
+};
+export type retrySourceResponseError = (retrySourceResponse401 | retrySourceResponse404 | retrySourceResponse409) & {
+  headers: Headers;
+};
+
+export type retrySourceResponse = (retrySourceResponseSuccess | retrySourceResponseError)
+
+export const getRetrySourceUrl = (sourceId: string,) => {
+
+
+
+
+  return `/sources/${sourceId}/retry`
+}
+
+/**
+ * «Повторить» for a Source in «ошибка» while its Material is in «ошибка»: the Source is extracted
+ * again and Processing goes on; Sources already read are not extracted again.
+ * Returns the Material; 409 when the Source or its Material is not in «ошибка».
+ */
+export const retrySource = async (sourceId: string, options?: RequestInit): Promise<retrySourceResponse> => {
+
+  const res = await fetch(getRetrySourceUrl(sourceId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: retrySourceResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as retrySourceResponse
 }
 
 

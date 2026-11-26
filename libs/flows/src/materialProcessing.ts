@@ -242,5 +242,8 @@ export function awaitedEvent(context: MaterialProcessingContext): string | null 
   return next === undefined ? null : sourceDoneEventType(next);
 }
 
+/** Workflow event type that wakes a Processing waiting in «Ошибка» after «Повторить». */
+export const RETRY_EVENT_TYPE = "retry";
+
 /** Workflow event type carrying one Source's extraction result. */
 export const sourceDoneEventType = (sourceId: string) => `source-${sourceId}`;

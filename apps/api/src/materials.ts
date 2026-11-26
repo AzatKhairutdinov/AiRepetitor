@@ -1,5 +1,6 @@
 import { checkFile } from "@airepetitor/formats";
-import { and, asc, desc, eq } from "drizzle-orm";
+import type { MaterialProcessingContext, PersistedFlow } from "@airepetitor/flows";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { type DrizzleD1Database, drizzle } from "drizzle-orm/d1";
 import type {
   CreateMaterialRequest,
@@ -12,7 +13,7 @@ import type {
   SourceStatus,
   TopicMark,
 } from "../../../libs/contract/src/server/api.schemas.ts";
-import { material, materialTopic, profile, source, topic } from "./db/schema.ts";
+import { material, materialFlow, materialTopic, profile, source, topic } from "./db/schema.ts";
 import type { Env } from "./env.ts";
 import { startNextMaterial } from "./processing/queue.ts";
 import type { Storage } from "./storage.ts";
@@ -195,4 +196,85 @@ export async function confirmUpload(
   }
   const [current] = await d.select().from(material).where(eq(material.id, materialId));
   return { ok: true, material: await withSources(d, current!) };
+}
+
+export type RetryResult =
+  | { ok: true; material: Material }
+  | { ok: false; error: "notFound" }
+  | { ok: false; error: "conflict"; message: string };
+
+const NOT_FAILED = "Повторить можно, только когда Материал в ошибке";
+
+/**
+ * The Processing snapshot when it waits in «Ошибка» for «Повторить», else null. The Material is
+ * «failed», or already «queued» again after an earlier «Повторить».
+ */
+async function waitingFlow(d: DrizzleD1Database, row: MaterialRow) {
+  if (row.status !== "failed" && row.status !== "queued") return null;
+  const [flow] = await d.select().from(materialFlow).where(eq(materialFlow.materialId, row.id));
+  if (!flow) return null;
+  const snapshot = JSON.parse(flow.snapshot) as PersistedFlow<MaterialProcessingContext>;
+  return snapshot.value === "failed" ? snapshot : null;
+}
+
+/** Marks the Sources for extraction again and puts the Material back in the Profile queue. */
+async function requeue(env: Env, d: DrizzleD1Database, row: MaterialRow, sourceIds: string[]) {
+  await d.batch([
+    d.update(material).set({ status: "queued", errorReason: null }).where(eq(material.id, row.id)),
+    ...(sourceIds.length > 0
+      ? [
+          d
+            .update(source)
+            .set({ status: "queued", errorReason: null })
+            .where(and(inArray(source.id, sourceIds), eq(source.status, "failed"))),
+        ]
+      : []),
+  ]);
+  try {
+    await startNextMaterial(env, row.profileId);
+  } catch (error) {
+    // The Material stays queued; the next upload or finish in this Profile wakes it.
+    console.error("Could not resume processing", row.id, error);
+  }
+  const [current] = await d.select().from(material).where(eq(material.id, row.id));
+  return withSources(d, current!);
+}
+
+/** «Повторить» for the Material: from the failed step, or all failed Sources when none was read. */
+export async function retryMaterial(
+  env: Env,
+  userId: string,
+  materialId: string,
+): Promise<RetryResult> {
+  const d = db(env);
+  const row = await ownedMaterial(d, userId, materialId);
+  if (!row) return { ok: false, error: "notFound" };
+  const flow = await waitingFlow(d, row);
+  if (!flow) return { ok: false, error: "conflict", message: NOT_FAILED };
+  if (row.status === "queued") return { ok: true, material: await withSources(d, row) };
+  const again = flow.context.failure === "noSourceRead" ? flow.context.failed : [];
+  return { ok: true, material: await requeue(env, d, row, again) };
+}
+
+/** «Повторить» for one failed Source of a Material in «Ошибка». */
+export async function retrySource(
+  env: Env,
+  userId: string,
+  sourceId: string,
+): Promise<RetryResult> {
+  const d = db(env);
+  const [found] = await d
+    .select({ material, source })
+    .from(source)
+    .innerJoin(material, eq(material.id, source.materialId))
+    .innerJoin(profile, eq(profile.id, material.profileId))
+    .where(and(eq(source.id, sourceId), eq(profile.userId, userId)));
+  if (!found) return { ok: false, error: "notFound" };
+  if (found.source.status !== "failed") {
+    return { ok: false, error: "conflict", message: "Этот файл не в ошибке" };
+  }
+  if (!(await waitingFlow(d, found.material))) {
+    return { ok: false, error: "conflict", message: NOT_FAILED };
+  }
+  return { ok: true, material: await requeue(env, d, found.material, [sourceId]) };
 }

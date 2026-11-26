@@ -127,14 +127,26 @@ export async function commitTopics(
   return { type: "TOPICS_COMMITTED", count: links.length };
 }
 
-/** Topics of this Material in the Tutor's order, for the per-Topic flows. */
-export async function materialTopicIds(env: Env, materialId: string): Promise<string[]> {
-  const rows = await drizzle(env.DB)
+/**
+ * Topics of this Material in the Tutor's order, for the per-Topic flows. Topics whose Digest
+ * this Material already saved are left out, so «Повторить» goes on from the failed Topic.
+ */
+export async function topicsWithoutDigest(env: Env, materialId: string): Promise<string[]> {
+  const d = drizzle(env.DB);
+  const rows = await d
     .select({ topicId: materialTopic.topicId })
     .from(materialTopic)
     .where(eq(materialTopic.materialId, materialId))
     .orderBy(asc(materialTopic.position));
-  return rows.map((r) => r.topicId);
+  const written = new Set(
+    (
+      await d
+        .select({ topicId: digestVersion.topicId })
+        .from(digestVersion)
+        .where(eq(digestVersion.materialId, materialId))
+    ).map((r) => r.topicId),
+  );
+  return rows.map((r) => r.topicId).filter((id) => !written.has(id));
 }
 
 async function loadTopic(env: Env, topicId: string) {

@@ -1,4 +1,8 @@
-import { materialsGetMaterial } from "@airepetitor/contract/client";
+import {
+  materialsGetMaterial,
+  materialsRetryMaterial,
+  retrySource,
+} from "@airepetitor/contract/client";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import { useProfile } from "./ProfileLayout.tsx";
@@ -13,6 +17,9 @@ export function MaterialCard() {
   const { materialId = "" } = useParams();
   const [material, setMaterial] = useState<Material | null>(null);
   const [missing, setMissing] = useState(false);
+  const [retryError, setRetryError] = useState<string | null>(null);
+  // Bumped after «Повторить» so polling starts again.
+  const [round, setRound] = useState(0);
   const { reload } = useProfile();
 
   useEffect(() => {
@@ -39,7 +46,21 @@ export function MaterialCard() {
       stopped = true;
       clearTimeout(timer);
     };
-  }, [materialId, reload]);
+  }, [materialId, reload, round]);
+
+  /** «Повторить»: the API answers with the Material back in the queue, or why it cannot. */
+  const retry = async (request: () => ReturnType<typeof materialsRetryMaterial>) => {
+    setRetryError(null);
+    try {
+      const res = await request();
+      if (res.status === 200) {
+        setMaterial(res.data);
+        setRound((r) => r + 1);
+      } else setRetryError(res.data.message);
+    } catch {
+      setRetryError("Не удалось связаться с сервером, попробуйте ещё раз");
+    }
+  };
 
   if (missing) return <main>Материал не найден.</main>;
   if (!material) return <main>Загрузка…</main>;
@@ -50,6 +71,15 @@ export function MaterialCard() {
         <h2>{materialTitle(material)}</h2>
         <p>Статус: {MATERIAL_STATUS[material.status]}</p>
         {material.errorReason && <p role="alert">{material.errorReason}</p>}
+        {material.status === "failed" && (
+          <button
+            type="button"
+            onClick={() => void retry(() => materialsRetryMaterial(material.id))}
+          >
+            Повторить
+          </button>
+        )}
+        {retryError && <p role="alert">{retryError}</p>}
         <section aria-label="Чат">{/* The Tutor's Chat arrives with a later ticket. */}</section>
       </main>
       <aside>
@@ -59,6 +89,11 @@ export function MaterialCard() {
             <li key={s.id}>
               {s.fileName} — {SOURCE_STATUS[s.status]}
               {s.errorReason && <div role="alert">{s.errorReason}</div>}
+              {s.status === "failed" && material.status === "failed" && (
+                <button type="button" onClick={() => void retry(() => retrySource(s.id))}>
+                  Повторить
+                </button>
+              )}
             </li>
           ))}
         </ul>

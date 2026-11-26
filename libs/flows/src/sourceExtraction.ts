@@ -1,5 +1,5 @@
 import { assign, setup } from "xstate";
-import type { StateMeta } from "./meta.ts";
+import { type StateMeta, WAITS_FOR_LEARNER } from "./meta.ts";
 
 export const SOURCE_EXTRACTION_VERSION = 2;
 
@@ -14,13 +14,16 @@ export type SourceExtractionEvent =
   | { type: "CLAIM" }
   | { type: "LEASE_EXPIRED" }
   | { type: "SUCCEED" }
-  | { type: "FAIL" };
+  | { type: "FAIL" }
+  /** «Повторить» from the Learner: the Source goes back to the queue with fresh attempts. */
+  | { type: "RETRY" };
 
 /** «Извлечение исходника»: one worker job, from the queue to a Source text or an error. */
 export const sourceExtraction = setup({
   types: {} as { context: SourceExtractionContext; events: SourceExtractionEvent },
   actions: {
     countAttempt: assign(({ context }) => ({ attempts: context.attempts + 1 })),
+    resetAttempts: assign({ attempts: 0 }),
   },
   guards: {
     attemptsLeft: ({ context }) => context.attempts < MAX_ATTEMPTS,
@@ -50,8 +53,12 @@ export const sourceExtraction = setup({
       meta: { owner: "worker", title: "Текст извлечён" } satisfies StateMeta,
     },
     failed: {
-      type: "final",
-      meta: { owner: "worker", title: "Ошибка" } satisfies StateMeta,
+      // Not final: the Source waits here for «Повторить» from the Learner.
+      tags: [WAITS_FOR_LEARNER],
+      meta: { owner: "worker", title: "Ошибка, кнопка «Повторить»" } satisfies StateMeta,
+      on: {
+        RETRY: { target: "queued", actions: "resetAttempts", description: "«Повторить»" },
+      },
     },
   },
 });

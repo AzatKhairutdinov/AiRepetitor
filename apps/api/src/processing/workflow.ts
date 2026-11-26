@@ -6,12 +6,14 @@ import {
   MATERIAL_PROCESSING_VERSION,
   type MaterialFailure,
   type MaterialProcessingContext,
+  RETRY_EVENT_TYPE,
   type TopicDigestContext,
   advanceFlow,
   awaitedEvent,
   isFinal,
   materialProcessing,
   startFlow,
+  stopsHere,
   topicDigest,
 } from "@airepetitor/flows";
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
@@ -21,13 +23,13 @@ import { material, source } from "../db/schema.ts";
 import type { Env } from "../env.ts";
 import { fixCurrentEdition } from "../playbook.ts";
 import { logTransition, saveMaterialFlow } from "./flowStore.ts";
-import { enqueueExtraction } from "./jobs.ts";
+import { confirmSourceDone, enqueueExtraction, sourcesToRetry } from "./jobs.ts";
 import { finishMaterial } from "./queue.ts";
 import { revisionRounds } from "../models/roles.ts";
 import { checkDraft, reviewDigest, reviewTopics } from "./review.ts";
 import {
   commitTopics,
-  materialTopicIds,
+  topicsWithoutDigest,
   remarksFromReport,
   reviseDraft,
   saveVersion,
@@ -44,6 +46,9 @@ type FlowEvent = { type: string };
 /** Long enough for a laptop that is off over a long weekend. */
 const WORKER_TIMEOUT = "30 days";
 
+/** The longest wait Workflows allow; «Повторить» waits for as many of these as it takes. */
+const LEARNER_TIMEOUT = "365 days";
+
 /** Learner-facing reason for each failure of «Обработка материала». */
 const FAILURE_REASON: Record<MaterialFailure, string> = {
   noSourceRead: "Не удалось прочитать ни один файл",
@@ -51,10 +56,9 @@ const FAILURE_REASON: Record<MaterialFailure, string> = {
 };
 
 /** Material status for each final state. */
-const FINAL_STATUS: Record<string, "topicsReady" | "noTopics" | "failed"> = {
+const FINAL_STATUS: Record<string, "topicsReady" | "noTopics"> = {
   done: "topicsReady",
   noTopics: "noTopics",
-  failed: "failed",
 };
 
 interface FlowSpec {
@@ -62,14 +66,21 @@ interface FlowSpec {
   /** Step-name prefix; unique per flow within the instance. */
   prefix: string;
   input: unknown;
-  /** Runs one action. A `step` action runs inside step.do; a `flow` action may run child flows. */
+  /**
+   * Runs one action. A `step` action runs inside step.do; a `flow` action may run child flows
+   * and gets a key unique to this run of the action, for its own step names.
+   */
   actions: Record<
     string,
     | { step: (context: unknown) => Promise<FlowEvent | void> }
-    | { flow: (context: unknown) => Promise<FlowEvent | void> }
+    | { flow: (context: unknown, key: string) => Promise<FlowEvent | void> }
   >;
   /** Workflow event to wait for when no action answered, or null. */
   awaited?: (context: unknown) => string | null;
+  /** Turns a received event into the machine's event; null ignores it (runs inside a step). */
+  confirm?: (received: FlowEvent) => Promise<FlowEvent | null>;
+  /** In a state tagged WAITS_FOR_LEARNER: waits for the Learner and returns the machine's event. */
+  waitForLearner?: (context: unknown, key: string) => Promise<FlowEvent>;
   save: (from: FlowStep | null, to: FlowStep, event: string) => Promise<unknown>;
 }
 
@@ -94,14 +105,13 @@ export class MaterialProcessing extends WorkflowEntrypoint<Env, Params> {
           const run = spec.actions[action.type];
           if (!run) throw new Error(`No executor for ${spec.machine.id}.${action.type}`);
           const context = current.snapshot.context;
+          const key = `${spec.prefix}${n}-${k}-${action.type}`;
           const result =
             "step" in run
               ? (JSON.parse(
-                  await step.do(`${spec.prefix}${n}-${k}-${action.type}`, async () =>
-                    JSON.stringify((await run.step(context)) ?? null),
-                  ),
+                  await step.do(key, async () => JSON.stringify((await run.step(context)) ?? null)),
                 ) as FlowEvent | null)
-              : ((await run.flow(context)) ?? null);
+              : ((await run.flow(context, key)) ?? null);
           reply = result ?? reply;
         }
         if (isFinal(current.snapshot)) return current;
@@ -109,14 +119,29 @@ export class MaterialProcessing extends WorkflowEntrypoint<Env, Params> {
         let next: FlowEvent;
         if (reply) {
           next = reply;
+        } else if (spec.waitForLearner && stopsHere(spec.machine, current.snapshot)) {
+          next = await spec.waitForLearner(current.snapshot.context, `${spec.prefix}${n}`);
         } else {
           const type = spec.awaited?.(current.snapshot.context);
           if (!type) throw new Error(`${spec.machine.id} is stuck in ${current.snapshot.value}`);
-          const received = await step.waitForEvent<FlowEvent>(`${spec.prefix}${n}-wait-${type}`, {
-            type,
-            timeout: WORKER_TIMEOUT,
-          });
-          next = received.payload;
+          const { confirm } = spec;
+          let confirmed: FlowEvent | null = null;
+          // A stale event is ignored: wait again under the next step name.
+          for (let w = 0; !confirmed; w++) {
+            const name = `${spec.prefix}${n}-wait-${type}${w === 0 ? "" : `-${w}`}`;
+            const received = await step.waitForEvent<FlowEvent>(name, {
+              type,
+              timeout: WORKER_TIMEOUT,
+            });
+            confirmed = confirm
+              ? (JSON.parse(
+                  await step.do(`${name}-confirm`, async () =>
+                    JSON.stringify(await confirm(received.payload)),
+                  ),
+                ) as FlowEvent | null)
+              : received.payload;
+          }
+          next = confirmed;
         }
 
         // Pure and deterministic, so it is safe outside a step.
@@ -129,12 +154,12 @@ export class MaterialProcessing extends WorkflowEntrypoint<Env, Params> {
       }
     };
 
-    /** «Конспект темы» for one Topic, as a child flow of this instance. */
-    const digestTopic = (topicId: string, rounds: number) => {
+    /** «Конспект темы» for one Topic, as a child flow of this instance (one per `key`). */
+    const digestTopic = (topicId: string, rounds: number, key: string) => {
       const ctx = (context: unknown) => context as TopicDigestContext;
       return runFlow({
         machine: topicDigest,
-        prefix: `topic-${topicId}-`,
+        prefix: `${key}-topic-${topicId}-`,
         input: { topicId, revisionRounds: rounds },
         actions: {
           writeDraft: { step: () => writeDraft(env, materialId, topicId) },
@@ -206,22 +231,25 @@ export class MaterialProcessing extends WorkflowEntrypoint<Env, Params> {
         prefix: "",
         input: { sourceIds, revisionRounds: revisionRounds(env) },
         actions: {
-          enqueueExtraction: { step: () => enqueueExtraction(env, materialId) },
+          enqueueExtraction: {
+            step: (c) => enqueueExtraction(env, materialId, mp(c).awaiting),
+          },
           splitTopics: { step: (c) => splitTopics(env, materialId, mp(c).topicErrors) },
           reviewTopics: {
             step: (c) => reviewTopics(env, materialId, mp(c).proposal, mp(c).topicRounds),
           },
           commitTopics: { step: (c) => commitTopics(env, materialId, mp(c).proposal) },
           writeDigests: {
-            flow: async (c) => {
+            flow: async (c, key) => {
+              // After «Повторить», Topics whose Digest this Material already wrote are skipped.
               const topicIds: string[] = JSON.parse(
-                await step.do("topics", async () =>
-                  JSON.stringify(await materialTopicIds(env, materialId)),
+                await step.do(`${key}-topics`, async () =>
+                  JSON.stringify(await topicsWithoutDigest(env, materialId)),
                 ),
               );
               // One Topic after another, so a Processing stays one Workflow instance.
               for (const topicId of topicIds) {
-                const done = await digestTopic(topicId, mp(c).revisionRounds);
+                const done = await digestTopic(topicId, mp(c).revisionRounds, key);
                 if (done.snapshot.value === "failed") return { type: "MODEL_FAILED" };
               }
               return { type: "DIGESTS_DONE" };
@@ -229,6 +257,38 @@ export class MaterialProcessing extends WorkflowEntrypoint<Env, Params> {
           },
         },
         awaited: (context) => awaitedEvent(context as MaterialProcessingContext),
+        confirm: async (received) => {
+          const { sourceId } = received as { sourceId?: string };
+          return sourceId ? confirmSourceDone(env, sourceId) : null;
+        },
+        waitForLearner: async (c, key) => {
+          // The Material shows «Ошибка» and frees its Profile, so the next Material can start.
+          await step.do(`${key}-pause`, async () => {
+            const failure = mp(c).failure;
+            await drizzle(env.DB)
+              .update(material)
+              .set({ status: "failed", errorReason: failure ? FAILURE_REASON[failure] : null })
+              .where(eq(material.id, materialId));
+            await finishMaterial(env, materialId);
+          });
+          // «Повторить» puts the Material back in the Profile queue; the queue sends the event.
+          for (let i = 0; ; i++) {
+            try {
+              await step.waitForEvent(`${key}-wait-${RETRY_EVENT_TYPE}-${i}`, {
+                type: RETRY_EVENT_TYPE,
+                timeout: LEARNER_TIMEOUT,
+              });
+              break;
+            } catch {
+              // Nobody pressed «Повторить» for a year: keep waiting.
+            }
+          }
+          return JSON.parse(
+            await step.do(`${key}-retry`, async () =>
+              JSON.stringify({ type: "RETRY", sourceIds: await sourcesToRetry(env, materialId) }),
+            ),
+          );
+        },
         save: (from, to, eventType) =>
           saveMaterialFlow(env, {
             machine: materialProcessing,
@@ -252,14 +312,15 @@ export class MaterialProcessing extends WorkflowEntrypoint<Env, Params> {
     }
 
     await step.do("finish", async () => {
-      const status = FINAL_STATUS[final.snapshot.value] ?? "failed";
-      const failure = (final.snapshot.context as MaterialProcessingContext).failure;
+      // Only the final states reach here; anything else would be a machine bug.
+      const status = FINAL_STATUS[final.snapshot.value];
       await drizzle(env.DB)
         .update(material)
-        .set({
-          status,
-          errorReason: status === "failed" && failure ? FAILURE_REASON[failure] : null,
-        })
+        .set(
+          status
+            ? { status, errorReason: null }
+            : { status: "failed", errorReason: "Не удалось обработать материал" },
+        )
         .where(eq(material.id, materialId));
       await finishMaterial(env, materialId);
     });

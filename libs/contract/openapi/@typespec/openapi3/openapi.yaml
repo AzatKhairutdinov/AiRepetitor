@@ -54,6 +54,44 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NotFoundError'
+  /materials/{materialId}/retry:
+    post:
+      operationId: Materials_retryMaterial
+      description: |-
+        «Повторить» for a Material in «ошибка»: it goes back to the Profile queue and goes on from
+        the failed step. When no Source was read, the failed Sources are extracted again.
+        409 when the Material is not in «ошибка».
+      parameters:
+        - name: materialId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Material'
+        '401':
+          description: Access is unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+        '409':
+          description: The request conflicts with the current state of the server.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConflictError'
   /materials/{materialId}/uploaded:
     post:
       operationId: Materials_confirmUpload
@@ -258,6 +296,44 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NotFoundError'
+  /sources/{sourceId}/retry:
+    post:
+      operationId: retrySource
+      description: |-
+        «Повторить» for a Source in «ошибка» while its Material is in «ошибка»: the Source is extracted
+        again and Processing goes on; Sources already read are not extracted again.
+        Returns the Material; 409 when the Source or its Material is not in «ошибка».
+      parameters:
+        - name: sourceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Material'
+        '401':
+          description: Access is unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+        '409':
+          description: The request conflicts with the current state of the server.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConflictError'
   /sources/{sourceId}/text:
     get:
       operationId: getSourceText
