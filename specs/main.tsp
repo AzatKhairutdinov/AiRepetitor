@@ -412,3 +412,23 @@ model FlowList {
 @route("/team/flows")
 @get
 op teamListFlows(): FlowList | UnauthorizedError | ForbiddenError;
+
+/** Code Checks of the Playbook (content/checks.yaml), validated by this model at generation. */
+model CodeChecks {
+  /** Template sections (level-2 headings), in order. */
+  sections: string[];
+
+  /** A Russian sentence may have at most this many words; examples in the studied language do not count. */
+  maxSentenceWords: int32;
+
+  /** Bureaucratese and every glossary _Avoid_ word (the generator adds the latter). */
+  forbiddenWords: string[];
+
+  /** Every source label must point at a Source of this Processing. */
+  checkSourceLabels: boolean;
+}
+
+/** The Code Checks of the Playbook edition this API was built with. */
+@route("/team/checks")
+@get
+op teamGetChecks(): CodeChecks | UnauthorizedError | ForbiddenError;

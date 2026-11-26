@@ -52,6 +52,7 @@ export type GetSourceTextContext<E extends Env = any> = Context<E, '/sources/:so
  }, }, out: { param: {
  sourceId: string,
  }, } }>
+export type TeamGetChecksContext<E extends Env = any> = Context<E, '/team/checks'>
 export type TeamListFlowsContext<E extends Env = any> = Context<E, '/team/flows'>
 export type GetTopicContext<E extends Env = any> = Context<E, '/topics/:topicId', { in: { param: {
  topicId: string,

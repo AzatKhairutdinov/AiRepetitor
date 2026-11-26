@@ -133,6 +133,8 @@ export const playbookEdition = sqliteTable("playbook_edition", {
   edition: text("edition").primaryKey(),
   /** JSON object: path → content. */
   files: text("files").notNull(),
+  /** JSON CodeChecks of this edition (validated, with the glossary _Avoid_ words). */
+  checks: text("checks").notNull().default("null"),
   createdAt: integer("created_at", { mode: "timestamp_ms" })
     .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
     .notNull(),
@@ -192,3 +194,23 @@ export const digestVersion = sqliteTable(
     uniqueIndex("digest_version_topic_material_uq").on(table.topicId, table.materialId),
   ],
 );
+
+/** Check Report: one per check of one draft (Code Checks or Methodologist). Not shown to the Learner. */
+export const checkReport = sqliteTable("check_report", {
+  id: text("id").primaryKey(),
+  materialId: text("material_id")
+    .notNull()
+    .references(() => material.id, { onDelete: "cascade" }),
+  /** Null for the review of the Topic split. */
+  topicId: text("topic_id"),
+  /** codeChecks | methodologist | topics */
+  kind: text("kind").notNull(),
+  /** Revision round the draft belongs to (0 before any revision). */
+  round: integer("round").notNull(),
+  passed: integer("passed", { mode: "boolean" }).notNull(),
+  /** JSON: Code Check violations or Methodologist errors. */
+  findings: text("findings").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" })
+    .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+    .notNull(),
+});
