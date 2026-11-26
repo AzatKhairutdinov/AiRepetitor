@@ -153,3 +153,49 @@ export const ProfileMaterialsCreateMaterialResponse = zod.object({
 }).describe('Where the browser PUTs one file.'))
 })
 
+
+export const WorkerClaimJobHeader = zod.object({
+  "x-worker-protocol": zod.string()
+})
+
+export const WorkerClaimJobResponse = zod.object({
+  "jobId": zod.string(),
+  "sourceId": zod.string(),
+  "kind": zod.enum(['pdf', 'image', 'document', 'audio', 'video']),
+  "mimeType": zod.string(),
+  "fileName": zod.string(),
+  "size": zod.int(),
+  "durationSeconds": zod.number().optional(),
+  "attempt": zod.int().describe('Attempt number; send it back in `complete`.'),
+  "leaseExpiresAt": zod.iso.datetime({"offset":true}),
+  "readUrl": zod.string().describe('Signed GET of the original file.'),
+  "writeText": zod.object({
+  "url": zod.string(),
+  "headers": zod.record(zod.string(), zod.string()).describe('Headers the PUT must carry.')
+}).describe('A signed link to PUT one object.').describe('Where to PUT the Source text (Markdown).'),
+  "writeAudio": zod.object({
+  "url": zod.string(),
+  "headers": zod.record(zod.string(), zod.string()).describe('Headers the PUT must carry.')
+}).describe('A signed link to PUT one object.').optional().describe('Audio and video only: where to PUT the extracted audio track (Opus in Ogg).')
+}).describe('One Source to extract, leased to the worker until `leaseExpiresAt`.')
+
+
+export const WorkerCompleteJobParams = zod.object({
+  "jobId": zod.string()
+})
+
+export const WorkerCompleteJobHeader = zod.object({
+  "x-worker-protocol": zod.string()
+})
+
+export const WorkerCompleteJobBody = zod.object({
+  "attempt": zod.int(),
+  "outcome": zod.enum(['success', 'failure']),
+  "method": zod.string().optional().describe('Success: how the text was extracted, e.g. xberg, pandoc, whisper, vision.'),
+  "audioSaved": zod.boolean().optional().describe('Success, audio and video: the audio track was saved through `writeAudio`.'),
+  "code": zod.string().optional().describe('Failure: a machine-readable code.'),
+  "reason": zod.string().optional().describe('Failure: the reason in Russian, shown to the Learner.')
+})
+
+export const WorkerCompleteJobResponse = zod.void()
+

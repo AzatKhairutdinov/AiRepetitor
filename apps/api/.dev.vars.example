@@ -2,3 +2,5 @@
 BETTER_AUTH_SECRET=replace-with-openssl-rand-base64-32
 # The browser origin (the Vite dev server proxies /api to the Worker on :8787)
 BETTER_AUTH_URL=http://localhost:5173
+# Shared secret of the extraction worker (mise run dev:setup generates one)
+WORKER_TOKEN=replace-with-openssl-rand-base64-32

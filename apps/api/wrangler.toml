@@ -1,5 +1,5 @@
 name = "airepetitor-api"
-main = "src/index.ts"
+main = "src/worker.ts"
 compatibility_date = "2026-11-01"
 compatibility_flags = ["nodejs_compat"] # Better Auth uses AsyncLocalStorage
 
@@ -14,3 +14,9 @@ migrations_dir = "migrations"
 [[r2_buckets]]
 binding = "FILES"
 bucket_name = "airepetitor-files"
+
+# Processing of one Material: XState decides, the Workflow executes (ADR 0004).
+[[workflows]]
+name = "material-processing"
+binding = "PROCESSING"
+class_name = "MaterialProcessing"
