@@ -8,7 +8,7 @@ import type { Env } from "./env.ts";
 // Generated per run so no secret-looking literals live in the repo.
 const randomValue = () => `${crypto.randomUUID()}${crypto.randomUUID()}`;
 
-let env: Env;
+let env: Pick<Env, "DB" | "BETTER_AUTH_SECRET" | "BETTER_AUTH_URL">;
 let dispose: () => Promise<void>;
 
 beforeAll(async () => {

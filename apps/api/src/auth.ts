@@ -5,7 +5,7 @@ import * as schema from "./db/auth-schema.ts";
 import type { Env } from "./env.ts";
 
 // Built per request: Workers bindings (DB, secrets) only exist inside a request.
-export function createAuth(env: Env) {
+export function createAuth(env: Pick<Env, "DB" | "BETTER_AUTH_SECRET" | "BETTER_AUTH_URL">) {
   return betterAuth({
     database: drizzleAdapter(drizzle(env.DB), { provider: "sqlite", schema }),
     secret: env.BETTER_AUTH_SECRET,

@@ -5,6 +5,7 @@
   "type": "module",
   "dependencies": {
     "@airepetitor/contract": "workspace:*",
+    "@airepetitor/formats": "workspace:*",
     "better-auth": "^1.7.27",
     "react": "*",
     "react-dom": "*",

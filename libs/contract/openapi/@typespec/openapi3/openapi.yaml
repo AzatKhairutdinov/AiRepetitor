@@ -26,6 +26,69 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LanguageList'
+  /materials/{materialId}:
+    get:
+      operationId: Materials_getMaterial
+      parameters:
+        - name: materialId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Material'
+        '401':
+          description: Access is unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+  /materials/{materialId}/uploaded:
+    post:
+      operationId: Materials_confirmUpload
+      description: 'Called after every PUT finished: checks the files are in storage.'
+      parameters:
+        - name: materialId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Material'
+        '400':
+          description: The server could not understand the request due to invalid syntax.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequestError'
+        '401':
+          description: Access is unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
   /profiles:
     get:
       operationId: Profiles_listProfiles
@@ -99,8 +162,83 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NotFoundError'
+  /profiles/{profileId}/materials:
+    get:
+      operationId: ProfileMaterials_listMaterials
+      parameters:
+        - name: profileId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaterialList'
+        '401':
+          description: Access is unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+    post:
+      operationId: ProfileMaterials_createMaterial
+      description: Registers a Material and its Sources and returns a write link per file.
+      parameters:
+        - name: profileId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '201':
+          description: The request has succeeded and a new resource has been created as a result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedMaterial'
+        '400':
+          description: The server could not understand the request due to invalid syntax.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequestError'
+        '401':
+          description: Access is unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMaterialRequest'
 components:
   schemas:
+    BadRequestError:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
     ConflictError:
       type: object
       required:
@@ -108,6 +246,17 @@ components:
       properties:
         message:
           type: string
+    CreateMaterialRequest:
+      type: object
+      required:
+        - sources
+      properties:
+        title:
+          type: string
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/NewSource'
     CreateProfileRequest:
       type: object
       required:
@@ -115,6 +264,18 @@ components:
       properties:
         language:
           $ref: '#/components/schemas/LanguageCode'
+    CreatedMaterial:
+      type: object
+      required:
+        - material
+        - uploads
+      properties:
+        material:
+          $ref: '#/components/schemas/Material'
+        uploads:
+          type: array
+          items:
+            $ref: '#/components/schemas/SourceUpload'
     Health:
       type: object
       required:
@@ -159,6 +320,88 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Language'
+    Material:
+      type: object
+      required:
+        - id
+        - profileId
+        - status
+        - createdAt
+        - sources
+      properties:
+        id:
+          type: string
+        profileId:
+          type: string
+        title:
+          type: string
+        status:
+          $ref: '#/components/schemas/MaterialStatus'
+        createdAt:
+          type: string
+          format: date-time
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/Source'
+    MaterialList:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MaterialSummary'
+    MaterialStatus:
+      type: string
+      enum:
+        - uploading
+        - uploaded
+        - queued
+        - processing
+        - topicsReady
+        - noTopics
+        - failed
+      description: uploading → uploaded → queued → processing → topicsReady | noTopics | failed
+    MaterialSummary:
+      type: object
+      required:
+        - id
+        - profileId
+        - status
+        - createdAt
+      properties:
+        id:
+          type: string
+        profileId:
+          type: string
+        title:
+          type: string
+        status:
+          $ref: '#/components/schemas/MaterialStatus'
+        createdAt:
+          type: string
+          format: date-time
+      description: Everything the Learner sent the Tutor in one upload.
+    NewSource:
+      type: object
+      required:
+        - fileName
+        - mimeType
+        - size
+      properties:
+        fileName:
+          type: string
+        mimeType:
+          type: string
+        size:
+          type: integer
+          format: int64
+        durationSeconds:
+          type: number
+          format: double
+          description: Seconds, when the browser could read it from the media metadata.
     NotFoundError:
       type: object
       required:
@@ -194,6 +437,71 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Profile'
+    Source:
+      type: object
+      required:
+        - id
+        - fileName
+        - kind
+        - mimeType
+        - size
+        - status
+      properties:
+        id:
+          type: string
+        fileName:
+          type: string
+        kind:
+          $ref: '#/components/schemas/SourceKind'
+        mimeType:
+          type: string
+        size:
+          type: integer
+          format: int64
+        durationSeconds:
+          type: number
+          format: double
+        status:
+          $ref: '#/components/schemas/SourceStatus'
+        errorReason:
+          type: string
+          description: Russian reason for the Learner, set when status is failed.
+      description: One file the Learner sent within a Material.
+    SourceKind:
+      type: string
+      enum:
+        - pdf
+        - image
+        - document
+        - audio
+        - video
+    SourceStatus:
+      type: string
+      enum:
+        - uploading
+        - uploaded
+        - queued
+        - extracting
+        - extracted
+        - failed
+      description: uploading → uploaded → queued → extracting → extracted | failed
+    SourceUpload:
+      type: object
+      required:
+        - sourceId
+        - url
+        - headers
+      properties:
+        sourceId:
+          type: string
+        url:
+          type: string
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+          description: Headers the PUT must carry.
+      description: Where the browser PUTs one file.
     UnauthorizedError:
       type: object
       required:

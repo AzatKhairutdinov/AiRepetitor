@@ -4,8 +4,25 @@
  * AiRepetitor API
  * OpenAPI spec version: 0.0.0
  */
+export interface BadRequestError {
+  message: string;
+}
+
 export interface ConflictError {
   message: string;
+}
+
+export interface NewSource {
+  fileName: string;
+  mimeType: string;
+  size: number;
+  /** Seconds, when the browser could read it from the media metadata. */
+  durationSeconds?: number;
+}
+
+export interface CreateMaterialRequest {
+  title?: string;
+  sources: NewSource[];
 }
 
 /**
@@ -32,6 +49,92 @@ export interface CreateProfileRequest {
   language: LanguageCode;
 }
 
+/**
+ * uploading → uploaded → queued → processing → topicsReady | noTopics | failed
+ */
+export type MaterialStatus = typeof MaterialStatus[keyof typeof MaterialStatus];
+
+
+export const MaterialStatus = {
+  uploading: 'uploading',
+  uploaded: 'uploaded',
+  queued: 'queued',
+  processing: 'processing',
+  topicsReady: 'topicsReady',
+  noTopics: 'noTopics',
+  failed: 'failed',
+} as const;
+
+export type SourceKind = typeof SourceKind[keyof typeof SourceKind];
+
+
+export const SourceKind = {
+  pdf: 'pdf',
+  image: 'image',
+  document: 'document',
+  audio: 'audio',
+  video: 'video',
+} as const;
+
+/**
+ * uploading → uploaded → queued → extracting → extracted | failed
+ */
+export type SourceStatus = typeof SourceStatus[keyof typeof SourceStatus];
+
+
+export const SourceStatus = {
+  uploading: 'uploading',
+  uploaded: 'uploaded',
+  queued: 'queued',
+  extracting: 'extracting',
+  extracted: 'extracted',
+  failed: 'failed',
+} as const;
+
+/**
+ * One file the Learner sent within a Material.
+ */
+export interface Source {
+  id: string;
+  fileName: string;
+  kind: SourceKind;
+  mimeType: string;
+  size: number;
+  durationSeconds?: number;
+  status: SourceStatus;
+  /** Russian reason for the Learner, set when status is failed. */
+  errorReason?: string;
+}
+
+export interface Material {
+  id: string;
+  profileId: string;
+  title?: string;
+  status: MaterialStatus;
+  createdAt: string;
+  sources: Source[];
+}
+
+/**
+ * Headers the PUT must carry.
+ */
+export type SourceUploadHeaders = {[key: string]: string};
+
+/**
+ * Where the browser PUTs one file.
+ */
+export interface SourceUpload {
+  sourceId: string;
+  url: string;
+  /** Headers the PUT must carry. */
+  headers: SourceUploadHeaders;
+}
+
+export interface CreatedMaterial {
+  material: Material;
+  uploads: SourceUpload[];
+}
+
 export type HealthStatus = typeof HealthStatus[keyof typeof HealthStatus];
 
 
@@ -51,6 +154,21 @@ export interface Language {
 
 export interface LanguageList {
   items: Language[];
+}
+
+/**
+ * Everything the Learner sent the Tutor in one upload.
+ */
+export interface MaterialSummary {
+  id: string;
+  profileId: string;
+  title?: string;
+  status: MaterialStatus;
+  createdAt: string;
+}
+
+export interface MaterialList {
+  items: MaterialSummary[];
 }
 
 export interface NotFoundError {
