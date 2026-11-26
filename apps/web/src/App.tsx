@@ -1,14 +1,21 @@
-import { useEffect, useState } from "react";
-import { health } from "@airepetitor/contract/client";
+import { Route, Routes } from "react-router";
+import { authClient } from "./auth.ts";
+import { ChooseLanguage } from "./screens/ChooseLanguage.tsx";
+import { ChooseProfile } from "./screens/ChooseProfile.tsx";
+import { ProfileHome } from "./screens/ProfileHome.tsx";
+import { SignIn } from "./screens/SignIn.tsx";
 
 export function App() {
-  const [status, setStatus] = useState("loading");
+  const { data: session, isPending } = authClient.useSession();
 
-  useEffect(() => {
-    health()
-      .then((res) => setStatus(res.data.status))
-      .catch(() => setStatus("unreachable"));
-  }, []);
+  if (isPending) return <main>Загрузка…</main>;
+  if (!session) return <SignIn />;
 
-  return <main>API status: {status}</main>;
+  return (
+    <Routes>
+      <Route path="/" element={<ChooseProfile />} />
+      <Route path="/languages" element={<ChooseLanguage />} />
+      <Route path="/profiles/:profileId" element={<ProfileHome />} />
+    </Routes>
+  );
 }

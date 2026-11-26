@@ -4,6 +4,34 @@
  * AiRepetitor API
  * OpenAPI spec version: 0.0.0
  */
+export interface ConflictError {
+  message: string;
+}
+
+/**
+ * ISO 639-1 code of a language a Learner can study.
+ */
+export type LanguageCode = typeof LanguageCode[keyof typeof LanguageCode];
+
+
+export const LanguageCode = {
+  en: 'en',
+  es: 'es',
+  fr: 'fr',
+  de: 'de',
+  it: 'it',
+  pt: 'pt',
+  zh: 'zh',
+  ja: 'ja',
+  ko: 'ko',
+  tr: 'tr',
+  sr: 'sr',
+} as const;
+
+export interface CreateProfileRequest {
+  language: LanguageCode;
+}
+
 export type HealthStatus = typeof HealthStatus[keyof typeof HealthStatus];
 
 
@@ -13,5 +41,38 @@ export const HealthStatus = {
 
 export interface Health {
   status: HealthStatus;
+}
+
+export interface Language {
+  code: LanguageCode;
+  /** Russian name, also the name of a Profile for this language. */
+  name: string;
+}
+
+export interface LanguageList {
+  items: Language[];
+}
+
+export interface NotFoundError {
+  message: string;
+}
+
+/**
+ * One Learner studying one language.
+ */
+export interface Profile {
+  id: string;
+  language: LanguageCode;
+  /** Named after the language, in Russian. */
+  name: string;
+  createdAt: string;
+}
+
+export interface ProfileList {
+  items: Profile[];
+}
+
+export interface UnauthorizedError {
+  message: string;
 }
 

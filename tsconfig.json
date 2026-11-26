@@ -1,5 +1,7 @@
 {
   "extends": "./tsconfig.base.json",
+  // The server contract imports the API handlers, which use Workers bindings.
+  "compilerOptions": { "types": ["@cloudflare/workers-types", "node"] },
   "include": ["libs/**/*.ts", "scripts/**/*.ts"],
   "exclude": ["node_modules", "libs/contract/openapi"]
 }
