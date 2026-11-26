@@ -65,3 +65,13 @@ export async function finishMaterial(env: Env, materialId: string): Promise<void
     .where(and(eq(profile.id, row.profileId), eq(profile.activeMaterialId, materialId)));
   await startNextMaterial(env, row.profileId);
 }
+
+/** The queue gave this Material its Profile: it is the one being processed. */
+export async function holdsProfile(env: Env, materialId: string): Promise<boolean> {
+  const [row] = await drizzle(env.DB)
+    .select({ id: profile.id })
+    .from(profile)
+    .innerJoin(material, eq(material.profileId, profile.id))
+    .where(and(eq(material.id, materialId), eq(profile.activeMaterialId, materialId)));
+  return Boolean(row);
+}

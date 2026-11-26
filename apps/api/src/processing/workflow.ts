@@ -24,7 +24,7 @@ import type { Env } from "../env.ts";
 import { fixCurrentEdition } from "../playbook.ts";
 import { logTransition, saveMaterialFlow } from "./flowStore.ts";
 import { confirmSourceDone, enqueueExtraction, sourcesToRetry } from "./jobs.ts";
-import { finishMaterial } from "./queue.ts";
+import { finishMaterial, holdsProfile } from "./queue.ts";
 import { revisionRounds } from "../models/roles.ts";
 import { checkDraft, reviewDigest, reviewTopics } from "./review.ts";
 import {
@@ -272,17 +272,17 @@ export class MaterialProcessing extends WorkflowEntrypoint<Env, Params> {
               .where(eq(material.id, materialId));
             await finishMaterial(env, materialId);
           });
-          // «Повторить» puts the Material back in the Profile queue; the queue sends the event.
+          // «Повторить» puts the Material back in the Profile queue; the queue sends the event
+          // once it gives this Material the Profile. A wake without the Profile is a repeated
+          // event and is ignored.
           for (let i = 0; ; i++) {
+            const name = `${key}-wait-${RETRY_EVENT_TYPE}-${i}`;
             try {
-              await step.waitForEvent(`${key}-wait-${RETRY_EVENT_TYPE}-${i}`, {
-                type: RETRY_EVENT_TYPE,
-                timeout: LEARNER_TIMEOUT,
-              });
-              break;
+              await step.waitForEvent(name, { type: RETRY_EVENT_TYPE, timeout: LEARNER_TIMEOUT });
             } catch {
-              // Nobody pressed «Повторить» for a year: keep waiting.
+              continue; // Nobody pressed «Повторить» for a year: keep waiting.
             }
+            if (await stepJson(`${name}-confirm`, () => holdsProfile(env, materialId))) break;
           }
           return stepJson(`${key}-retry`, async () => ({
             type: "RETRY",
