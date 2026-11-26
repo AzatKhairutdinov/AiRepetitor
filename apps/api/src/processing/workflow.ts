@@ -4,7 +4,6 @@ import {
   type FlowMachine,
   type FlowStep,
   MATERIAL_PROCESSING_VERSION,
-  type MaterialFailure,
   type MaterialProcessingContext,
   RETRY_EVENT_TYPE,
   type TopicDigestContext,
@@ -25,6 +24,8 @@ import { fixCurrentEdition } from "../playbook.ts";
 import { logTransition, saveMaterialFlow } from "./flowStore.ts";
 import { confirmSourceDone, enqueueExtraction, sourcesToRetry } from "./jobs.ts";
 import { finishMaterial, holdsProfile } from "./queue.ts";
+import { FAILURE_REASON, PROCESSING_BROKE } from "./reasons.ts";
+import { chatPoster, digestChatEvents, materialChatEvents, postMessages } from "./chat.ts";
 import { revisionRounds } from "../models/roles.ts";
 import { checkDraft, reviewDigest, reviewTopics } from "./review.ts";
 import {
@@ -48,12 +49,6 @@ const WORKER_WAIT_DAYS = 30;
 
 /** The longest wait Workflows allow; «Повторить» waits for as many of these as it takes. */
 const LEARNER_TIMEOUT = "365 days";
-
-/** Learner-facing reason for each failure of «Обработка материала». */
-const FAILURE_REASON: Record<MaterialFailure, string> = {
-  noSourceRead: "Не удалось прочитать ни один файл",
-  tutorUnavailable: "Репетитор сейчас недоступен",
-};
 
 /** Material status for each final state. */
 const FINAL_STATUS: Record<string, "topicsReady" | "noTopics"> = {
@@ -85,6 +80,15 @@ interface FlowSpec {
   /** In a state tagged WAITS_FOR_LEARNER: waits for the Learner and returns the machine's event. */
   waitForLearner?: (context: unknown, key: string) => Promise<FlowEvent>;
   save: (from: FlowStep | null, to: FlowStep, event: string) => Promise<unknown>;
+  /**
+   * What to tell the Learner about a saved transition: work for its own step (`id` is the step
+   * name), or null when there is nothing to say, so quiet transitions cost no step. Must not throw.
+   */
+  notify?: (
+    from: FlowStep | null,
+    to: FlowStep,
+    event: FlowEvent,
+  ) => ((id: string) => Promise<void>) | null;
 }
 
 export class MaterialProcessing extends WorkflowEntrypoint<Env, Params> {
@@ -103,6 +107,11 @@ export class MaterialProcessing extends WorkflowEntrypoint<Env, Params> {
         await spec.save(null, started, "START");
         return started;
       });
+      const tellStart = spec.notify?.(null, current, { type: "START" });
+      if (tellStart) {
+        const name = `${spec.prefix}start-notify`;
+        await step.do(name, () => tellStart(name));
+      }
       for (let n = 0; ; n++) {
         let reply: FlowEvent | null = null;
         for (const [k, action] of current.actions.entries()) {
@@ -156,6 +165,11 @@ export class MaterialProcessing extends WorkflowEntrypoint<Env, Params> {
         await step.do(`${spec.prefix}${n}-save`, async () => {
           await spec.save(previous, current, eventType);
         });
+        const tell = spec.notify?.(previous, current, next);
+        if (tell) {
+          const name = `${spec.prefix}${n}-notify`;
+          await step.do(name, () => tell(name));
+        }
       }
     };
 
@@ -198,6 +212,7 @@ export class MaterialProcessing extends WorkflowEntrypoint<Env, Params> {
           },
           saveVersion: { step: (c) => saveVersion(env, materialId, topicId, ctx(c).draft ?? "") },
         },
+        notify: (_, to, event) => chatPoster(env, materialId, digestChatEvents(to, topicId, event)),
         save: (from, to, eventType) =>
           logTransition(env, {
             machine: topicDigest,
@@ -289,6 +304,8 @@ export class MaterialProcessing extends WorkflowEntrypoint<Env, Params> {
             sourceIds: await sourcesToRetry(env, materialId),
           }));
         },
+        notify: (from, to, event) =>
+          chatPoster(env, materialId, materialChatEvents(from, to, event)),
         save: (from, to, eventType) =>
           saveMaterialFlow(env, {
             machine: materialProcessing,
@@ -301,10 +318,16 @@ export class MaterialProcessing extends WorkflowEntrypoint<Env, Params> {
       });
     } catch (error) {
       // A wait that timed out or a step that kept failing: never leave the Profile queue blocked.
+      // The Chat line goes first, so it is there when the card sees the final status.
+      await step.do("finish-after-error-notify", () =>
+        postMessages(env, materialId, "finish-after-error", [
+          { kind: "Сбой обработки", reason: PROCESSING_BROKE },
+        ]),
+      );
       await step.do("finish-after-error", async () => {
         await drizzle(env.DB)
           .update(material)
-          .set({ status: "failed", errorReason: "Не удалось обработать материал" })
+          .set({ status: "failed", errorReason: PROCESSING_BROKE })
           .where(eq(material.id, materialId));
         await finishMaterial(env, materialId);
       });
@@ -319,7 +342,7 @@ export class MaterialProcessing extends WorkflowEntrypoint<Env, Params> {
         .set(
           status
             ? { status, errorReason: null }
-            : { status: "failed", errorReason: "Не удалось обработать материал" },
+            : { status: "failed", errorReason: PROCESSING_BROKE },
         )
         .where(eq(material.id, materialId));
       await finishMaterial(env, materialId);

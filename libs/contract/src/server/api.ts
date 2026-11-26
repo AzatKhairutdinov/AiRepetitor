@@ -12,6 +12,7 @@ import {
 import { healthHandlers } from '../../../../apps/api/src/handlers/health';
 import { listLanguagesHandlers } from '../../../../apps/api/src/handlers/listLanguages';
 import { materialsGetMaterialHandlers } from '../../../../apps/api/src/handlers/materialsGetMaterial';
+import { materialsListMessagesHandlers } from '../../../../apps/api/src/handlers/materialsListMessages';
 import { materialsRetryMaterialHandlers } from '../../../../apps/api/src/handlers/materialsRetryMaterial';
 import { materialsConfirmUploadHandlers } from '../../../../apps/api/src/handlers/materialsConfirmUpload';
 import { profilesListProfilesHandlers } from '../../../../apps/api/src/handlers/profilesListProfiles';
@@ -37,6 +38,12 @@ const app = new Hono()
 
 
   .get('/materials/:materialId', ...materialsGetMaterialHandlers)
+
+/**
+ * The Chat of the Material, oldest Message first.
+ */
+
+  .get('/materials/:materialId/messages', ...materialsListMessagesHandlers)
 
 /**
  * «Повторить» for a Material in «ошибка»: it goes back to the Profile queue and goes on from

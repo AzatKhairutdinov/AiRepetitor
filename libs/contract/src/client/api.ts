@@ -19,6 +19,7 @@ import type {
   LanguageList,
   Material,
   MaterialList,
+  MessageList,
   NotFoundError,
   Profile,
   ProfileList,
@@ -179,6 +180,61 @@ export const materialsGetMaterial = async (materialId: string, options?: Request
 
   const data: materialsGetMaterialResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as materialsGetMaterialResponse
+}
+
+
+
+export type materialsListMessagesResponse200 = {
+  data: MessageList
+  status: 200
+}
+
+export type materialsListMessagesResponse401 = {
+  data: UnauthorizedError
+  status: 401
+}
+
+export type materialsListMessagesResponse404 = {
+  data: NotFoundError
+  status: 404
+}
+
+export type materialsListMessagesResponseSuccess = (materialsListMessagesResponse200) & {
+  headers: Headers;
+};
+export type materialsListMessagesResponseError = (materialsListMessagesResponse401 | materialsListMessagesResponse404) & {
+  headers: Headers;
+};
+
+export type materialsListMessagesResponse = (materialsListMessagesResponseSuccess | materialsListMessagesResponseError)
+
+export const getMaterialsListMessagesUrl = (materialId: string,) => {
+
+
+
+
+  return `/materials/${materialId}/messages`
+}
+
+/**
+ * The Chat of the Material, oldest Message first.
+ */
+export const materialsListMessages = async (materialId: string, options?: RequestInit): Promise<materialsListMessagesResponse> => {
+
+  const res = await fetch(getMaterialsListMessagesUrl(materialId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: materialsListMessagesResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as materialsListMessagesResponse
 }
 
 

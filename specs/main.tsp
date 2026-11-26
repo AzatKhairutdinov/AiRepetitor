@@ -262,6 +262,28 @@ interface Materials {
   @route("/retry")
   @post
   retryMaterial(@path materialId: string): Material | ConflictError | UnauthorizedError | NotFoundError;
+
+  /** The Chat of the Material, oldest Message first. */
+  @route("/messages")
+  @get
+  listMessages(@path materialId: string): MessageList | UnauthorizedError | NotFoundError;
+}
+
+union MessageAuthor {
+  "tutor",
+  "learner",
+}
+
+/** One Message in the Chat of a Material; for now only the Tutor writes. */
+model Message {
+  id: string;
+  author: MessageAuthor;
+  text: string;
+  createdAt: utcDateTime;
+}
+
+model MessageList {
+  items: Message[];
 }
 
 /**

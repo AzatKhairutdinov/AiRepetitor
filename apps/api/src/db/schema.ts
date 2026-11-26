@@ -1,6 +1,14 @@
 // Hand-written domain tables. Better Auth tables are generated into auth-schema.ts.
 import { sql } from "drizzle-orm";
-import { integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import {
+  index,
+  integer,
+  primaryKey,
+  real,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
 import { user } from "./auth-schema.ts";
 
 export * from "./auth-schema.ts";
@@ -216,3 +224,20 @@ export const checkReport = sqliteTable("check_report", {
     .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
     .notNull(),
 });
+
+/** One Message in the Chat of a Material. The id is derived from the flow step, so a replay writes it once. */
+export const message = sqliteTable(
+  "message",
+  {
+    id: text("id").primaryKey(),
+    materialId: text("material_id")
+      .notNull()
+      .references(() => material.id, { onDelete: "cascade" }),
+    author: text("author", { enum: ["tutor", "learner"] }).notNull(),
+    text: text("text").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+  },
+  (table) => [index("message_material_idx").on(table.materialId, table.createdAt)],
+);

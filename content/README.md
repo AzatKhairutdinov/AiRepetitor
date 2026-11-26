@@ -8,6 +8,8 @@
 - `tutor/digest.md` — инструкция Репетитора «Конспект».
 - `tutor/revise.md` — инструкция Репетитора «правка Конспекта».
 - `tutor/digest-update.md` — инструкция Репетитора «новая версия Конспекта».
+- `tutor/chat.md` — инструкция Репетитора «Реплика в Чате».
+- `templates/chat.md` — заготовки Реплик Чата на случай, когда модель недоступна; раздел — событие Обработки.
 - `methodologist/digest.md`, `methodologist/digest-update.md`, `methodologist/topics.md` — инструкции Методиста.
 - `worker/vision.md` — инструкция vision-модели: переписать текст с фото или страницы скана. Worker получает её в задании.
 - `checks.yaml` — Проверки кодом; схема — модель `CodeChecks` в `specs/main.tsp`.

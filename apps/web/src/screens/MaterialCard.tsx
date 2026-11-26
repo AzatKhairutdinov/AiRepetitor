@@ -1,21 +1,29 @@
 import {
   materialsGetMaterial,
+  materialsListMessages,
   materialsRetryMaterial,
   retrySource,
 } from "@airepetitor/contract/client";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import { useProfile } from "./ProfileLayout.tsx";
-import type { Material, MaterialStatus } from "../../../../libs/contract/src/client/api.schemas.ts";
+import type {
+  Material,
+  MaterialStatus,
+  Message,
+} from "../../../../libs/contract/src/client/api.schemas.ts";
 import { MATERIAL_STATUS, SOURCE_STATUS, materialTitle } from "../labels.ts";
 
 const POLL_MS = 5000;
 const FINAL_STATUSES = new Set<MaterialStatus>(["topicsReady", "noTopics", "failed"]);
 
-/** Material Card: the Chat in the middle (empty for now), Sources with statuses beside it. */
+const TIME = new Intl.DateTimeFormat("ru", { hour: "2-digit", minute: "2-digit" });
+
+/** Material Card: the Tutor's Chat in the middle, Sources with statuses beside it. */
 export function MaterialCard() {
   const { materialId = "" } = useParams();
   const [material, setMaterial] = useState<Material | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [missing, setMissing] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
   // Bumped after «Повторить» so polling starts again.
@@ -24,16 +32,20 @@ export function MaterialCard() {
 
   useEffect(() => {
     setMaterial(null);
+    setMessages([]);
     setMissing(false);
     let timer: ReturnType<typeof setTimeout> | undefined;
     let stopped = false;
-    // Poll every 5 s until the Material reaches a final state.
+    // Poll the Material and then its Chat every 5 s until the Material reaches a final state.
+    // The Chat is read second: its last line is written before the final status.
     const load = () =>
       materialsGetMaterial(materialId)
-        .then((res) => {
+        .then(async (res) => [res, await materialsListMessages(materialId)] as const)
+        .then(([res, chat]) => {
           if (stopped) return;
           if (res.status !== 200) return setMissing(true);
           setMaterial(res.data);
+          if (chat.status === 200) setMessages(chat.data.items);
           if (!FINAL_STATUSES.has(res.data.status)) timer = setTimeout(load, POLL_MS);
           // New Topics appear in the menu once Processing is over.
           else reload();
@@ -80,7 +92,21 @@ export function MaterialCard() {
           </button>
         )}
         {retryError && <p role="alert">{retryError}</p>}
-        <section aria-label="Чат">{/* The Tutor's Chat arrives with a later ticket. */}</section>
+        <section aria-label="Чат">
+          {messages.length === 0 ? (
+            <p>Репетитор ещё ничего не написал.</p>
+          ) : (
+            <ol style={{ listStyle: "none", padding: 0 }}>
+              {messages.map((m) => (
+                <li key={m.id} style={{ marginBottom: "0.75rem" }}>
+                  <strong>{m.author === "tutor" ? "Репетитор" : "Вы"}</strong>{" "}
+                  <time dateTime={m.createdAt}>{TIME.format(new Date(m.createdAt))}</time>
+                  <p style={{ margin: "0.25rem 0 0" }}>{m.text}</p>
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
       </main>
       <aside>
         <h3>Исходники</h3>
