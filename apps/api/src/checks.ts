@@ -1,14 +1,12 @@
 // Code Checks of a Digest (content/checks.yaml). Pure and cheap: they run before the
 // Methodologist so model calls are not spent on plain defects.
+import { MODEL_LABEL, STORED_LABEL } from "@airepetitor/formats/source-labels";
 import type { CodeChecks } from "../../../libs/contract/src/server/api.schemas.ts";
-
-const LABEL = /\[\[source:([\w-]+)\]\]/g;
-const RAW_LABEL = /\[[SP]\d+\]/g;
 
 /** Markdown to plain text: no labels, links, emphasis or code marks. */
 const plain = (line: string) =>
   line
-    .replace(LABEL, " ")
+    .replace(STORED_LABEL, " ")
     .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/[*_`>#]/g, " ")
     .replace(/^\s*[-+]\s+|^\s*\d+\.\s+/, "");
@@ -95,11 +93,11 @@ export function runCodeChecks(
 
   // (4) Source labels point at Sources of this Processing.
   if (checks.checkSourceLabels) {
-    for (const [, id] of markdown.matchAll(LABEL)) {
+    for (const [, id] of markdown.matchAll(STORED_LABEL)) {
       if (!sourceIds.has(id!))
         violations.push(`Метка источника ${id} не указывает на материал этой загрузки.`);
     }
-    for (const [raw] of markdown.matchAll(RAW_LABEL))
+    for (const [raw] of markdown.matchAll(MODEL_LABEL))
       violations.push(`Метки ${raw} нет в списке источников.`);
   }
   return [...new Set(violations)];

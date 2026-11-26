@@ -1,5 +1,11 @@
 // What the Tutor and the Methodologist read in one Processing: the Material's Source texts,
 // the Profile's language and the Playbook edition fixed at the start.
+import {
+  MODEL_LABEL,
+  STORED_LABEL,
+  modelLabel,
+  storedLabel,
+} from "@airepetitor/formats/source-labels";
 import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import type { LanguageCode } from "../../../../libs/contract/src/server/api.schemas.ts";
@@ -66,21 +72,21 @@ export const sourcesBlock = (sources: LabelledSource[]) =>
 export const fill = (template: string, language: string) =>
   template.replaceAll("{{language}}", language);
 
-/** Turns the Tutor's `[S1]` labels into `[[source:<id>]]`; unknown labels stay as they are. */
+/** Turns the Tutor's `[S1]` and `[S1 00:12:34]` labels into stored ones; unknown labels stay as they are. */
 export function resolveLabels(markdown: string, sources: LabelledSource[]): string {
   const byLabel = new Map(sources.map((s) => [s.label, s.id]));
-  return markdown.replace(/\[([SP]\d+)\]/g, (whole, label: string) => {
+  return markdown.replace(MODEL_LABEL, (whole, label: string, at?: string) => {
     const id = byLabel.get(label);
-    return id ? `[[source:${id}]]` : whole;
+    return id ? storedLabel(id, at) : whole;
   });
 }
 
-/** The reverse, so the models read `[S1]` again. */
+/** The reverse, so the models read `[S1]` and `[S1 00:12:34]` again. */
 export function labelSources(markdown: string, sources: LabelledSource[]): string {
   const byId = new Map(sources.map((s) => [s.id, s.label]));
-  return markdown.replace(/\[\[source:([\w-]+)\]\]/g, (whole, id: string) => {
+  return markdown.replace(STORED_LABEL, (whole, id: string, at?: string) => {
     const label = byId.get(id);
-    return label ? `[${label}]` : whole;
+    return label ? modelLabel(label, at) : whole;
   });
 }
 
@@ -133,9 +139,7 @@ export async function previousVersion(
     .orderBy(desc(digestVersion.number))
     .limit(1);
   if (!last) return null;
-  const ids = [
-    ...new Set([...last.markdown.matchAll(/\[\[source:([\w-]+)\]\]/g)].map((m) => m[1]!)),
-  ];
+  const ids = [...new Set([...last.markdown.matchAll(STORED_LABEL)].map((m) => m[1]!))];
   return {
     number: last.number,
     markdown: last.markdown,

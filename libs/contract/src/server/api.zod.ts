@@ -343,9 +343,10 @@ export const WorkerCompleteJobBody = zod.object({
   "reason": zod.string().optional().describe('Failure: the reason in Russian, shown to the Learner.'),
   "usage": zod.array(zod.object({
   "model": zod.string().describe('Model id as sent to the provider.'),
-  "inputTokens": zod.int(),
-  "outputTokens": zod.int()
-}).describe('Tokens one model spent on a job; the API prices them and adds the cost to the Processing.')).optional().describe('Model calls of this attempt, on success and on failure alike.')
+  "inputTokens": zod.int().optional().describe('Token-priced models (vision).'),
+  "outputTokens": zod.int().optional(),
+  "audioMinutes": zod.number().optional().describe('Minute-priced models (speech recognition): minutes of audio transcribed.')
+}).describe('What one model spent on a job; the API prices it and adds the cost to the Processing.')).optional().describe('Model calls of this attempt, on success and on failure alike.')
 })
 
 export const WorkerCompleteJobResponse = zod.void()

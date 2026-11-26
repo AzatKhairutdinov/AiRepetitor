@@ -365,13 +365,18 @@ model ClaimJobRequest {
   kinds: SourceKind[];
 }
 
-/** Tokens one model spent on a job; the API prices them and adds the cost to the Processing. */
+/** What one model spent on a job; the API prices it and adds the cost to the Processing. */
 model ModelUsage {
   /** Model id as sent to the provider. */
   `model`: string;
 
-  inputTokens: int64;
-  outputTokens: int64;
+  /** Token-priced models (vision). */
+  inputTokens?: int64;
+
+  outputTokens?: int64;
+
+  /** Minute-priced models (speech recognition): minutes of audio transcribed. */
+  audioMinutes?: float64;
 }
 
 union JobOutcome {

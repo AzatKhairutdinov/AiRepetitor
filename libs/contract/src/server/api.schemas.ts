@@ -47,13 +47,16 @@ export const JobOutcome = {
 } as const;
 
 /**
- * Tokens one model spent on a job; the API prices them and adds the cost to the Processing.
+ * What one model spent on a job; the API prices it and adds the cost to the Processing.
  */
 export interface ModelUsage {
   /** Model id as sent to the provider. */
   model: string;
-  inputTokens: number;
-  outputTokens: number;
+  /** Token-priced models (vision). */
+  inputTokens?: number;
+  outputTokens?: number;
+  /** Minute-priced models (speech recognition): minutes of audio transcribed. */
+  audioMinutes?: number;
 }
 
 export interface CompleteJobRequest {

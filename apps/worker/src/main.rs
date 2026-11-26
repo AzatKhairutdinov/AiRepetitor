@@ -1,21 +1,25 @@
 //! AiRepetitor extraction worker: claim a job, extract its text, report back (ADR 0003).
 
 mod api;
+mod asr;
 mod config;
 mod document;
 mod log;
+mod media;
 mod pdf;
 mod photo;
+mod provider;
 mod vision;
 
-use api::{Api, ApiError, Job, Outcome};
+use api::{Api, ApiError, Job, Outcome, Usage};
+use asr::Asr;
 use config::Config;
 use document::Extracted;
 use log::Log;
 use pdfium_render::prelude::Pdfium;
 use serde_json::json;
 use std::{sync::Arc, time::Duration};
-use vision::{Reading, Usage, Vision};
+use vision::{Reading, Vision};
 
 const IDLE_PAUSE: Duration = Duration::from_secs(10);
 /// The API was deployed with another protocol: do not take jobs, look again later.
@@ -26,6 +30,10 @@ const PHOTO_UNREADABLE: &str = "не удалось прочитать фото:
 const PHOTO_FORMAT: &str = "формат фото не читается";
 const VISION_UNAVAILABLE: &str = "временная ошибка распознавания";
 const PDF_UNREADABLE: &str = "не удалось прочитать PDF";
+const MEDIA_UNREADABLE: &str = "не удалось прочитать запись";
+const MEDIA_TOO_LONG: &str = "запись длиннее 2 часов";
+const MEDIA_NO_AUDIO: &str = "в записи нет звука";
+const MEDIA_NO_SPEECH: &str = "в записи не удалось разобрать речь";
 
 /// Why a Source failed: a code for the API, a reason for the Learner, details for the log.
 struct Failure {
@@ -49,7 +57,7 @@ struct Worker {
     http: reqwest::Client,
     log: Log,
     vision: Option<Vision>,
-    vision_model: String,
+    asr: Option<Asr>,
     pdfium: Option<Arc<Pdfium>>,
 }
 
@@ -77,7 +85,14 @@ async fn main() {
             None
         }
     };
-    let kinds = config.kinds(pdfium.is_some());
+    let has_ffmpeg = media::tools_available().await;
+    if !has_ffmpeg {
+        log.error(
+            "ffmpeg or ffprobe is not in PATH; not taking audio and video (brew install ffmpeg)",
+            json!({}),
+        );
+    }
+    let kinds = config.kinds(pdfium.is_some(), has_ffmpeg);
     let worker = Worker {
         api: Api::new(http.clone(), &config.api_url, &config.worker_token),
         vision: config.deepinfra_api_key.as_deref().map(|key| {
@@ -88,7 +103,10 @@ async fn main() {
                 &config.vision_model,
             )
         }),
-        vision_model: config.vision_model.clone(),
+        asr: config
+            .deepinfra_api_key
+            .as_deref()
+            .map(|key| Asr::new(http.clone(), &config.model_base_url, key, &config.asr_model)),
         http,
         log,
         pdfium,
@@ -138,40 +156,56 @@ impl Worker {
         });
         self.log.info("job claimed", ids.clone());
 
-        let bytes = match download(&self.http, &job.read_url).await {
-            Ok(b) => b,
-            Err(e) => {
-                return self
-                    .log
-                    .error("download failed", json!({ "ids": ids, "error": e }));
-            }
-        };
-
-        let mut usage = Usage {
-            model: self.vision_model.clone(),
-            input_tokens: 0,
-            output_tokens: 0,
-        };
+        let mut usage = Usage::new("");
         let extracted = match job.kind.as_str() {
-            "document" => {
-                let mime = document::mime_for(&job.file_name, &job.mime_type);
-                document::extract(bytes, &job.file_name, &mime)
-                    .await
-                    .map_err(|e| {
-                        Failure::new("unreadable_document", "не удалось прочитать документ", e)
-                    })
+            "audio" | "video" => self.read_media(job, &mut usage).await,
+            kind => {
+                let bytes = match download(&self.http, &job.read_url).await {
+                    Ok(b) => b,
+                    Err(e) => {
+                        return self
+                            .log
+                            .error("download failed", json!({ "ids": ids, "error": e }));
+                    }
+                };
+                match kind {
+                    "document" => {
+                        let mime = document::mime_for(&job.file_name, &job.mime_type);
+                        document::extract(bytes, &job.file_name, &mime)
+                            .await
+                            .map_err(|e| {
+                                Failure::new(
+                                    "unreadable_document",
+                                    "не удалось прочитать документ",
+                                    e,
+                                )
+                            })
+                    }
+                    "image" => self.read_photo(job, bytes, &mut usage).await,
+                    "pdf" => self.read_pdf(job, bytes, &mut usage).await,
+                    other => Err(Failure::new(
+                        "unsupported_kind",
+                        format!("этот worker пока не умеет обрабатывать файлы вида «{other}»"),
+                        "",
+                    )),
+                }
+                .map(|text| (text, None))
             }
-            "image" => self.read_photo(job, bytes, &mut usage).await,
-            "pdf" => self.read_pdf(job, bytes, &mut usage).await,
-            other => Err(Failure::new(
-                "unsupported_kind",
-                format!("этот worker пока не умеет обрабатывать файлы вида «{other}»"),
-                "",
-            )),
         };
 
         let outcome = match extracted {
-            Ok(text) => {
+            Ok((text, audio)) => {
+                let audio_saved = match (audio, &job.write_audio) {
+                    (Some(bytes), Some(link)) => {
+                        if let Err(e) = upload(&self.http, link, bytes).await {
+                            return self
+                                .log
+                                .error("audio upload failed", json!({ "ids": ids, "error": e }));
+                        }
+                        Some(true)
+                    }
+                    _ => None,
+                };
                 if let Err(e) =
                     upload(&self.http, &job.write_text, text.markdown.into_bytes()).await
                 {
@@ -181,7 +215,7 @@ impl Worker {
                 }
                 Outcome::Success {
                     method: text.method.to_owned(),
-                    audio_saved: None,
+                    audio_saved,
                 }
             }
             Err(failure) => {
@@ -196,7 +230,7 @@ impl Worker {
             }
         };
 
-        let spent = if usage.input_tokens + usage.output_tokens > 0 {
+        let spent = if usage.is_spent() {
             vec![usage]
         } else {
             vec![]
@@ -232,6 +266,79 @@ impl Worker {
         Ok((vision, prompt))
     }
 
+    /// Audio straight from the signed link: duration check, the whole track as Opus for the
+    /// Learner, then speech recognition chunk by chunk. Returns the transcript and the track.
+    async fn read_media(
+        &self,
+        job: &Job,
+        usage: &mut Usage,
+    ) -> Result<(Extracted, Option<Vec<u8>>), Failure> {
+        let asr = self.asr.as_ref().ok_or_else(|| {
+            Failure::new(
+                "no_model_key",
+                VISION_UNAVAILABLE,
+                "DEEPINFRA_API_KEY is not set",
+            )
+        })?;
+        *usage = asr.usage();
+        let probe = media::probe(&job.read_url)
+            .await
+            .map_err(|e| Failure::new("unreadable_media", MEDIA_UNREADABLE, e))?;
+        if probe.seconds > media::MAX_SECONDS {
+            return Err(Failure::new(
+                "too_long",
+                MEDIA_TOO_LONG,
+                format!("{:.0} s", probe.seconds),
+            ));
+        }
+        if !probe.has_audio {
+            return Err(Failure::new("no_audio", MEDIA_NO_AUDIO, "no audio stream"));
+        }
+        let dir = tempfile::tempdir()
+            .map_err(|e| Failure::new("unreadable_media", MEDIA_UNREADABLE, e.to_string()))?;
+        let audio = media::extract_audio(&job.read_url, dir.path())
+            .await
+            .map_err(|e| Failure::new("unreadable_media", MEDIA_UNREADABLE, e))?;
+        let chunks = media::split(&audio, dir.path())
+            .await
+            .map_err(|e| Failure::new("unreadable_media", MEDIA_UNREADABLE, e))?;
+
+        let mut lines = Vec::new();
+        let mut minutes = 0.0;
+        for chunk in &chunks {
+            let ogg = tokio::fs::read(&chunk.path)
+                .await
+                .map_err(|e| Failure::new("unreadable_media", MEDIA_UNREADABLE, e.to_string()))?;
+            let segments = asr.transcribe(&ogg).await;
+            // Billed by the provider once answered, so count it before looking at the result.
+            if segments.is_ok() {
+                minutes += (chunk.end - chunk.start) / 60.0;
+                usage.audio_minutes = Some(minutes);
+            }
+            let segments =
+                segments.map_err(|e| Failure::new("asr_unavailable", VISION_UNAVAILABLE, e))?;
+            lines.extend(
+                segments
+                    .into_iter()
+                    .map(|s| format!("[{}] {}", media::timestamp(chunk.start + s.start), s.text)),
+            );
+        }
+        if lines.is_empty() {
+            return Err(Failure::new("no_speech", MEDIA_NO_SPEECH, "no segments"));
+        }
+        let track = tokio::fs::read(&audio)
+            .await
+            .map_err(|e| Failure::new("unreadable_media", MEDIA_UNREADABLE, e.to_string()))?;
+        Ok((
+            Extracted {
+                // A blank line between lines keeps each one its own paragraph in Markdown.
+                markdown: lines.join("\n\n"),
+                method: "whisper",
+            },
+            Some(track),
+        ))
+    }
+
     async fn read_photo(
         &self,
         job: &Job,
@@ -239,6 +346,7 @@ impl Worker {
         usage: &mut Usage,
     ) -> Result<Extracted, Failure> {
         let (vision, prompt) = self.vision_for(job)?;
+        *usage = vision.usage();
         let bytes = if photo::is_heic(&job.file_name, &job.mime_type) {
             photo::heic_to_jpeg(&bytes)
                 .await
@@ -287,6 +395,7 @@ impl Worker {
         );
 
         let (vision, prompt) = self.vision_for(job)?;
+        *usage = vision.usage();
         let pdfium = self
             .pdfium
             .clone()

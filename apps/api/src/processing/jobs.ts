@@ -19,7 +19,7 @@ import type {
 } from "../../../../libs/contract/src/server/api.schemas.ts";
 import { flowTransition, job, material, source, sourceText } from "../db/schema.ts";
 import type { Env } from "../env.ts";
-import { costMicroUsd } from "../models/chat.ts";
+import { usageCostMicroUsd } from "../models/prices.ts";
 import { loadPlaybook } from "../playbook.ts";
 import type { Storage } from "../storage.ts";
 import { transitionRow } from "./flowStore.ts";
@@ -67,14 +67,6 @@ async function visionPrompt(env: Env, materialId: string): Promise<string> {
     .where(eq(material.id, materialId));
   if (!row?.edition) throw new Error(`Material ${materialId} has no Playbook edition`);
   return (await loadPlaybook(env, row.edition)).file("content/worker/vision.md");
-}
-
-/** Sum of the worker's model calls, in millionths of a dollar. */
-function usageCost(usage: CompleteJobRequest["usage"]): number {
-  return (usage ?? []).reduce(
-    (sum, u) => sum + costMicroUsd(u.model, u.inputTokens, u.outputTokens),
-    0,
-  );
 }
 
 const textKey = (materialId: string, sourceId: string) => `texts/${materialId}/${sourceId}.md`;
@@ -334,7 +326,7 @@ export async function completeJob(
 
   // One transaction, so the job never looks finished without its Source, text and cost.
   const { from, to } = step(row, { type: ok ? "SUCCEED" : "FAIL" });
-  const cost = usageCost(body.usage);
+  const cost = usageCostMicroUsd(body.usage);
   await d.batch([
     d
       .update(job)
