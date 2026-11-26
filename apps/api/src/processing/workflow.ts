@@ -341,7 +341,7 @@ export class MaterialProcessing extends WorkflowEntrypoint<Env, Params> {
         .update(material)
         .set(
           status
-            ? { status, errorReason: null }
+            ? { status, errorReason: null, processedAt: new Date() }
             : { status: "failed", errorReason: PROCESSING_BROKE },
         )
         .where(eq(material.id, materialId));

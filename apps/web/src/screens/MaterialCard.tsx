@@ -1,11 +1,12 @@
 import {
+  materialsDeleteMaterial,
   materialsGetMaterial,
   materialsListMessages,
   materialsRetryMaterial,
   retrySource,
 } from "@airepetitor/contract/client";
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 import { useProfile } from "./ProfileLayout.tsx";
 import type {
   Material,
@@ -16,6 +17,8 @@ import { MATERIAL_STATUS, SOURCE_STATUS, materialTitle } from "../labels.ts";
 
 const POLL_MS = 5000;
 const FINAL_STATUSES = new Set<MaterialStatus>(["topicsReady", "noTopics", "failed"]);
+/** While the Material waits for or goes through Processing it cannot be deleted. */
+const BUSY_STATUSES = new Set<MaterialStatus>(["uploaded", "queued", "processing"]);
 
 const TIME = new Intl.DateTimeFormat("ru", { hour: "2-digit", minute: "2-digit" });
 
@@ -29,6 +32,7 @@ export function MaterialCard() {
   // Bumped after «Повторить» so polling starts again.
   const [round, setRound] = useState(0);
   const { reload } = useProfile();
+  const navigate = useNavigate();
 
   useEffect(() => {
     setMaterial(null);
@@ -74,6 +78,21 @@ export function MaterialCard() {
     }
   };
 
+  /** Deletes the whole Material after a confirmation; Digests of its Topics stay. */
+  const remove = async (current: Material) => {
+    if (!window.confirm("Удалить материал? Конспекты тем останутся")) return;
+    setRetryError(null);
+    try {
+      const res = await materialsDeleteMaterial(current.id);
+      if (res.status === 204) {
+        reload();
+        void navigate(`/profiles/${current.profileId}`);
+      } else setRetryError(res.data.message);
+    } catch {
+      setRetryError("Не удалось связаться с сервером, попробуйте ещё раз");
+    }
+  };
+
   if (missing) return <main>Материал не найден.</main>;
   if (!material) return <main>Загрузка…</main>;
 
@@ -92,6 +111,11 @@ export function MaterialCard() {
           </button>
         )}
         {retryError && <p role="alert">{retryError}</p>}
+        {!BUSY_STATUSES.has(material.status) && (
+          <button type="button" onClick={() => void remove(material)}>
+            Удалить материал
+          </button>
+        )}
         <section aria-label="Чат">
           {messages.length === 0 ? (
             <p>Репетитор ещё ничего не написал.</p>

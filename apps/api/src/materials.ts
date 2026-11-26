@@ -27,10 +27,11 @@ import {
   message,
   profile,
   source,
+  sourceText,
   topic,
 } from "./db/schema.ts";
 import type { Env } from "./env.ts";
-import { startNextMaterial } from "./processing/queue.ts";
+import { instanceId, startNextMaterial } from "./processing/queue.ts";
 import type { Storage } from "./storage.ts";
 
 /** A write link outlives a slow 1 GB upload. */
@@ -242,6 +243,7 @@ export type RetryResult =
   | { ok: false; error: "conflict"; message: string };
 
 const NOT_FAILED = "Повторить можно, только когда Материал в ошибке";
+const ORIGINAL_GONE = "Оригинал файла уже удалён, загрузите его ещё раз";
 
 /**
  * The Processing snapshot when it waits in «Ошибка» for «Повторить», else null. A flow stored
@@ -336,5 +338,72 @@ export async function retrySource(
   if (found.source.status !== "failed") {
     return { ok: false, error: "conflict", message: "Этот файл не в ошибке" };
   }
+  if (found.source.originalDeletedAt) {
+    return { ok: false, error: "conflict", message: ORIGINAL_GONE };
+  }
   return retry(env, d, found.material, [sourceId]);
+}
+
+/** R2 deletes at most this many keys per call. */
+const R2_DELETE_BATCH = 1000;
+
+/** A Material can be deleted unless it waits for or goes through Processing. */
+const DELETABLE = new Set<MaterialStatus>(["uploading", "topicsReady", "noTopics", "failed"]);
+
+export type DeleteResult = "ok" | "notFound" | "busy";
+
+/**
+ * Deletes a Material: D1 rows go first (Sources, Source texts, jobs, Chat, Material–Topic links,
+ * Check Reports and flow records cascade), then its files. Topics and Digest versions stay; their
+ * labels of this Material's Sources then show «материал удалён».
+ */
+export async function deleteMaterial(
+  env: Env,
+  userId: string,
+  materialId: string,
+): Promise<DeleteResult> {
+  const d = db(env);
+  const row = await ownedMaterial(d, userId, materialId);
+  if (!row) return "notFound";
+  if (!DELETABLE.has(row.status as MaterialStatus)) return "busy";
+
+  const files = await d
+    .select({
+      original: source.originalKey,
+      originalDeletedAt: source.originalDeletedAt,
+      text: sourceText.textKey,
+      audio: sourceText.audioKey,
+    })
+    .from(source)
+    .leftJoin(sourceText, eq(sourceText.sourceId, source.id))
+    .where(eq(source.materialId, materialId));
+  const keys = files.flatMap((f) => [
+    ...(f.originalDeletedAt ? [] : [f.original]),
+    ...(f.text ? [f.text] : []),
+    ...(f.audio ? [f.audio] : []),
+  ]);
+
+  // Only a delete that still sees a deletable status goes through. RETURNING, not meta.changes:
+  // D1 counts the cascaded rows as changes too.
+  const deleted = await d
+    .delete(material)
+    .where(and(eq(material.id, materialId), inArray(material.status, [...DELETABLE])))
+    .returning({ id: material.id });
+  if (deleted.length !== 1) return "busy";
+
+  if (row.status === "failed") {
+    // Its Workflow waits for «Повторить», which can no longer come.
+    try {
+      await (await env.PROCESSING.get(instanceId(materialId))).terminate();
+    } catch (error) {
+      console.warn("Could not stop the Workflow of a deleted Material", materialId, error);
+    }
+  }
+  try {
+    for (let i = 0; i < keys.length; i += R2_DELETE_BATCH)
+      await env.FILES.delete(keys.slice(i, i + R2_DELETE_BATCH));
+  } catch (error) {
+    console.error("Could not delete the files of a deleted Material", materialId, error);
+  }
+  return "ok";
 }

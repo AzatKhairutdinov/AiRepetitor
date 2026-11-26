@@ -184,6 +184,67 @@ export const materialsGetMaterial = async (materialId: string, options?: Request
 
 
 
+export type materialsDeleteMaterialResponse204 = {
+  data: void
+  status: 204
+}
+
+export type materialsDeleteMaterialResponse401 = {
+  data: UnauthorizedError
+  status: 401
+}
+
+export type materialsDeleteMaterialResponse404 = {
+  data: NotFoundError
+  status: 404
+}
+
+export type materialsDeleteMaterialResponse409 = {
+  data: ConflictError
+  status: 409
+}
+
+export type materialsDeleteMaterialResponseSuccess = (materialsDeleteMaterialResponse204) & {
+  headers: Headers;
+};
+export type materialsDeleteMaterialResponseError = (materialsDeleteMaterialResponse401 | materialsDeleteMaterialResponse404 | materialsDeleteMaterialResponse409) & {
+  headers: Headers;
+};
+
+export type materialsDeleteMaterialResponse = (materialsDeleteMaterialResponseSuccess | materialsDeleteMaterialResponseError)
+
+export const getMaterialsDeleteMaterialUrl = (materialId: string,) => {
+
+
+
+
+  return `/materials/${materialId}`
+}
+
+/**
+ * Deletes the Material with its Sources, files, Chat and links to Topics; Topics and Digest
+ * versions stay. 409 while the Material waits for or goes through Processing.
+ */
+export const materialsDeleteMaterial = async (materialId: string, options?: RequestInit): Promise<materialsDeleteMaterialResponse> => {
+
+  const res = await fetch(getMaterialsDeleteMaterialUrl(materialId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: materialsDeleteMaterialResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as materialsDeleteMaterialResponse
+}
+
+
+
 export type materialsListMessagesResponse200 = {
   data: MessageList
   status: 200

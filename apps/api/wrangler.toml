@@ -20,3 +20,8 @@ bucket_name = "airepetitor-files"
 name = "material-processing"
 binding = "PROCESSING"
 class_name = "MaterialProcessing"
+
+# Daily expiry of originals, 7 days after a successful Processing (ticket #25).
+# Locally: `wrangler dev --test-scheduled`, then GET /__scheduled.
+[triggers]
+crons = ["17 3 * * *"]
