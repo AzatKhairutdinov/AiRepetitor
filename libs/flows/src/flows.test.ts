@@ -138,12 +138,15 @@ it("draws the same graphs as before (snapshot)", () => {
 });
 
 /** Runs events through a machine the way the Workflow does: persisted snapshot in, step out. */
-function run(machine: AnyStateMachine, start: FlowStep, events: EventObject[]): FlowStep {
+function run(machine: AnyStateMachine, start: FlowStep, events: Ev[]): FlowStep {
   return events.reduce(
     (step, event) => advanceFlow(machine, step.snapshot as PersistedFlow, event as never),
     start,
   );
 }
+
+/** An event of any of the machines, with its own fields. */
+type Ev = EventObject & Record<string, unknown>;
 
 const ctx = (step: FlowStep) => step.snapshot.context as MaterialProcessingContext;
 
@@ -185,11 +188,11 @@ describe("«Обработка материала»: fallback paths", () => {
   it.each(["splittingTopics", "reviewingTopics", "digests"] as const)(
     "returns to %s after a model failure there and «Повторить»",
     (at) => {
-      const read: EventObject[] = [
+      const read: Ev[] = [
         { type: "SOURCE_DONE", sourceId: "a", ok: true },
         { type: "SOURCE_DONE", sourceId: "b", ok: true },
       ];
-      const upTo: Record<typeof at, EventObject[]> = {
+      const upTo: Record<typeof at, Ev[]> = {
         splittingTopics: read,
         reviewingTopics: [...read, { type: "TOPICS_SPLIT", topics: [topic] }],
         digests: [
@@ -236,7 +239,7 @@ describe("«Обработка материала»: fallback paths", () => {
 
 describe("«Извлечение исходника»: fallback paths", () => {
   it(`fails after ${MAX_ATTEMPTS} expired leases and gets fresh attempts on «Повторить»`, () => {
-    const lease: EventObject[] = [{ type: "CLAIM" }, { type: "LEASE_EXPIRED" }];
+    const lease: Ev[] = [{ type: "CLAIM" }, { type: "LEASE_EXPIRED" }];
     const failed = run(
       sourceExtraction,
       startFlow(sourceExtraction, undefined as never),
