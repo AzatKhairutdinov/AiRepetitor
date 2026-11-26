@@ -8,6 +8,11 @@ export interface Env {
   /** Tutor model: OpenAI-compatible base URL and model id. */
   TUTOR_BASE_URL?: string;
   TUTOR_MODEL?: string;
+  /** Methodologist model: OpenAI-compatible base URL and model id. */
+  METHODOLOGIST_BASE_URL?: string;
+  METHODOLOGIST_MODEL?: string;
+  /** Revision rounds after the Methodologist; default 1. */
+  REVISION_ROUNDS?: string;
   /** Shared secret of the extraction worker. */
   WORKER_TOKEN: string;
   BETTER_AUTH_SECRET: string;

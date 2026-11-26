@@ -23,7 +23,17 @@ import { fixCurrentEdition } from "../playbook.ts";
 import { logTransition, saveMaterialFlow } from "./flowStore.ts";
 import { enqueueExtraction } from "./jobs.ts";
 import { finishMaterial } from "./queue.ts";
-import { materialTopicIds, saveVersion, splitTopics, writeDraft } from "./tutor.ts";
+import { revisionRounds } from "../models/roles.ts";
+import { checkDraft, reviewDigest, reviewTopics } from "./review.ts";
+import {
+  commitTopics,
+  materialTopicIds,
+  remarksFromReport,
+  reviseDraft,
+  saveVersion,
+  splitTopics,
+  writeDraft,
+} from "./tutor.ts";
 
 interface Params {
   materialId: string;
@@ -120,17 +130,43 @@ export class MaterialProcessing extends WorkflowEntrypoint<Env, Params> {
     };
 
     /** «Конспект темы» for one Topic, as a child flow of this instance. */
-    const digestTopic = (topicId: string) =>
-      runFlow({
+    const digestTopic = (topicId: string, rounds: number) => {
+      const ctx = (context: unknown) => context as TopicDigestContext;
+      return runFlow({
         machine: topicDigest,
         prefix: `topic-${topicId}-`,
-        input: { topicId },
+        input: { topicId, revisionRounds: rounds },
         actions: {
           writeDraft: { step: () => writeDraft(env, materialId, topicId) },
-          saveVersion: {
-            step: (context) =>
-              saveVersion(env, materialId, topicId, (context as TopicDigestContext).draft ?? ""),
+          runCodeChecks: {
+            step: (c) => checkDraft(env, materialId, topicId, ctx(c).draft ?? "", ctx(c).rounds),
           },
+          fixByChecks: {
+            step: (c) =>
+              reviseDraft(env, materialId, topicId, ctx(c).draft ?? "", ctx(c).violations),
+          },
+          reviewDigest: {
+            step: (c) =>
+              reviewDigest(
+                env,
+                materialId,
+                topicId,
+                ctx(c).draft ?? "",
+                ctx(c).rounds,
+                ctx(c).violations,
+              ),
+          },
+          reviseByReport: {
+            step: (c) =>
+              reviseDraft(
+                env,
+                materialId,
+                topicId,
+                ctx(c).draft ?? "",
+                remarksFromReport(ctx(c).errors),
+              ),
+          },
+          saveVersion: { step: (c) => saveVersion(env, materialId, topicId, ctx(c).draft ?? "") },
         },
         save: (from, to, eventType) =>
           logTransition(env, {
@@ -142,7 +178,9 @@ export class MaterialProcessing extends WorkflowEntrypoint<Env, Params> {
             event: eventType,
           }),
       });
+    };
 
+    const mp = (context: unknown) => context as MaterialProcessingContext;
     let final: FlowStep;
     try {
       await step.do("fix-playbook-edition", async () => {
@@ -166,12 +204,16 @@ export class MaterialProcessing extends WorkflowEntrypoint<Env, Params> {
       final = await runFlow({
         machine: materialProcessing,
         prefix: "",
-        input: { sourceIds },
+        input: { sourceIds, revisionRounds: revisionRounds(env) },
         actions: {
           enqueueExtraction: { step: () => enqueueExtraction(env, materialId) },
-          splitTopics: { step: () => splitTopics(env, materialId) },
+          splitTopics: { step: (c) => splitTopics(env, materialId, mp(c).topicErrors) },
+          reviewTopics: {
+            step: (c) => reviewTopics(env, materialId, mp(c).proposal, mp(c).topicRounds),
+          },
+          commitTopics: { step: (c) => commitTopics(env, materialId, mp(c).proposal) },
           writeDigests: {
-            flow: async () => {
+            flow: async (c) => {
               const topicIds: string[] = JSON.parse(
                 await step.do("topics", async () =>
                   JSON.stringify(await materialTopicIds(env, materialId)),
@@ -179,8 +221,8 @@ export class MaterialProcessing extends WorkflowEntrypoint<Env, Params> {
               );
               // One Topic after another, so a Processing stays one Workflow instance.
               for (const topicId of topicIds) {
-                const done = await digestTopic(topicId);
-                if (done.snapshot.value === "failed") return { type: "TUTOR_FAILED" };
+                const done = await digestTopic(topicId, mp(c).revisionRounds);
+                if (done.snapshot.value === "failed") return { type: "MODEL_FAILED" };
               }
               return { type: "DIGESTS_DONE" };
             },

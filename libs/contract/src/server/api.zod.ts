@@ -198,6 +198,14 @@ export const GetSourceTextResponse = zod.object({
 })
 
 
+export const TeamGetChecksResponse = zod.object({
+  "sections": zod.array(zod.string()).describe('Template sections (level-2 headings), in order.'),
+  "maxSentenceWords": zod.int().describe('A Russian sentence may have at most this many words; examples in the studied language do not count.'),
+  "forbiddenWords": zod.array(zod.string()).describe('Bureaucratese and every glossary _Avoid_ word (the generator adds the latter).'),
+  "checkSourceLabels": zod.boolean().describe('Every source label must point at a Source of this Processing.')
+}).describe('Code Checks of the Playbook (content/checks.yaml), validated by this model at generation.')
+
+
 export const TeamListFlowsResponse = zod.object({
   "items": zod.array(zod.object({
   "id": zod.string().describe('Machine id in libs/flows.'),

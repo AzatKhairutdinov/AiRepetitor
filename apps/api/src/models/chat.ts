@@ -21,7 +21,7 @@ export interface ChatResult {
 }
 
 /** The provider did not answer after all retries. */
-export class ModelUnavailable extends Error {}
+class ModelUnavailable extends Error {}
 
 /** Dollars per million tokens. Unknown models cost 0 and are logged. */
 const PRICES: Readonly<Record<string, { input: number; output: number }>> = {

@@ -20,6 +20,7 @@ import { profileMaterialsListMaterialsHandlers } from '../../../../apps/api/src/
 import { profileMaterialsCreateMaterialHandlers } from '../../../../apps/api/src/handlers/profileMaterialsCreateMaterial';
 import { listTopicsHandlers } from '../../../../apps/api/src/handlers/listTopics';
 import { getSourceTextHandlers } from '../../../../apps/api/src/handlers/getSourceText';
+import { teamGetChecksHandlers } from '../../../../apps/api/src/handlers/teamGetChecks';
 import { teamListFlowsHandlers } from '../../../../apps/api/src/handlers/teamListFlows';
 import { getTopicHandlers } from '../../../../apps/api/src/handlers/getTopic';
 import { workerClaimJobHandlers } from '../../../../apps/api/src/handlers/workerClaimJob';
@@ -64,6 +65,12 @@ const app = new Hono()
 
 
   .get('/sources/:sourceId/text', ...getSourceTextHandlers)
+
+/**
+ * The Code Checks of the Playbook edition this API was built with.
+ */
+
+  .get('/team/checks', ...teamGetChecksHandlers)
 
 
   .get('/team/flows', ...teamListFlowsHandlers)

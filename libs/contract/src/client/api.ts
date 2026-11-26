@@ -7,6 +7,7 @@
 import type {
   BadRequestError,
   ClaimJobRequest,
+  CodeChecks,
   CompleteJobRequest,
   ConflictError,
   CreateMaterialRequest,
@@ -606,6 +607,61 @@ export const getSourceText = async (sourceId: string, options?: RequestInit): Pr
 
   const data: getSourceTextResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as getSourceTextResponse
+}
+
+
+
+export type teamGetChecksResponse200 = {
+  data: CodeChecks
+  status: 200
+}
+
+export type teamGetChecksResponse401 = {
+  data: UnauthorizedError
+  status: 401
+}
+
+export type teamGetChecksResponse403 = {
+  data: ForbiddenError
+  status: 403
+}
+
+export type teamGetChecksResponseSuccess = (teamGetChecksResponse200) & {
+  headers: Headers;
+};
+export type teamGetChecksResponseError = (teamGetChecksResponse401 | teamGetChecksResponse403) & {
+  headers: Headers;
+};
+
+export type teamGetChecksResponse = (teamGetChecksResponseSuccess | teamGetChecksResponseError)
+
+export const getTeamGetChecksUrl = () => {
+
+
+
+
+  return `/team/checks`
+}
+
+/**
+ * The Code Checks of the Playbook edition this API was built with.
+ */
+export const teamGetChecks = async ( options?: RequestInit): Promise<teamGetChecksResponse> => {
+
+  const res = await fetch(getTeamGetChecksUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: teamGetChecksResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as teamGetChecksResponse
 }
 
 

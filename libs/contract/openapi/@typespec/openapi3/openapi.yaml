@@ -286,6 +286,30 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NotFoundError'
+  /team/checks:
+    get:
+      operationId: teamGetChecks
+      description: The Code Checks of the Playbook edition this API was built with.
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CodeChecks'
+        '401':
+          description: Access is unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        '403':
+          description: Access is forbidden.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
   /team/flows:
     get:
       operationId: teamListFlows
@@ -447,6 +471,32 @@ components:
           items:
             $ref: '#/components/schemas/SourceKind'
           description: Source kinds this worker can extract; a worker without a model key leaves out images and media.
+    CodeChecks:
+      type: object
+      required:
+        - sections
+        - maxSentenceWords
+        - forbiddenWords
+        - checkSourceLabels
+      properties:
+        sections:
+          type: array
+          items:
+            type: string
+          description: Template sections (level-2 headings), in order.
+        maxSentenceWords:
+          type: integer
+          format: int32
+          description: A Russian sentence may have at most this many words; examples in the studied language do not count.
+        forbiddenWords:
+          type: array
+          items:
+            type: string
+          description: Bureaucratese and every glossary _Avoid_ word (the generator adds the latter).
+        checkSourceLabels:
+          type: boolean
+          description: Every source label must point at a Source of this Processing.
+      description: Code Checks of the Playbook (content/checks.yaml), validated by this model at generation.
     CompleteJobRequest:
       type: object
       required:
