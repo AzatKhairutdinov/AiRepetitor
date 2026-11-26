@@ -148,7 +148,11 @@ export async function previousVersion(
   };
 }
 
-/** Source ids a Digest of this Processing may cite: this Material's and the previous version's. */
+/**
+ * Source ids a Digest of this Processing may cite: this Material's, the previous version's
+ * Materials', and every label the previous version already carried, even when its Material was
+ * deleted since (the label then reads «материал удалён»).
+ */
 export async function citableSourceIds(
   env: Env,
   materialId: string,
@@ -159,5 +163,5 @@ export async function citableSourceIds(
     .select({ id: source.id })
     .from(source)
     .where(inArray(source.materialId, materials));
-  return new Set(rows.map((r) => r.id));
+  return new Set([...rows.map((r) => r.id), ...(previous?.labels.map((l) => l.id) ?? [])]);
 }

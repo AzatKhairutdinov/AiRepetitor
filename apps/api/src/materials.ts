@@ -347,8 +347,11 @@ export async function retrySource(
 /** R2 deletes at most this many keys per call. */
 const R2_DELETE_BATCH = 1000;
 
-/** A Material can be deleted unless it waits for or goes through Processing. */
-const DELETABLE = new Set<MaterialStatus>(["uploading", "topicsReady", "noTopics", "failed"]);
+/**
+ * A Material can be deleted once Processing ended. Not while uploading either: the browser may
+ * still PUT files the delete could no longer find.
+ */
+const DELETABLE = new Set<MaterialStatus>(["topicsReady", "noTopics", "failed"]);
 
 export type DeleteResult = "ok" | "notFound" | "busy";
 
@@ -390,6 +393,18 @@ export async function deleteMaterial(
     .where(and(eq(material.id, materialId), inArray(material.status, [...DELETABLE])))
     .returning({ id: material.id });
   if (deleted.length !== 1) return "busy";
+
+  // The Workflow sets the final status before it frees the Profile; a delete in between would
+  // leave the Profile held by a Material that no longer exists, so free it here too.
+  await d
+    .update(profile)
+    .set({ activeMaterialId: null })
+    .where(and(eq(profile.id, row.profileId), eq(profile.activeMaterialId, materialId)));
+  try {
+    await startNextMaterial(env, row.profileId);
+  } catch (error) {
+    console.error("Could not start the next Material after a delete", row.profileId, error);
+  }
 
   if (row.status === "failed") {
     // Its Workflow waits for «Повторить», which can no longer come.
