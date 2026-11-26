@@ -8,4 +8,5 @@ export WORKER_TOKEN="${WORKER_TOKEN:-$(value WORKER_TOKEN)}"
 export DEEPINFRA_API_KEY="${DEEPINFRA_API_KEY:-$(value DEEPINFRA_API_KEY)}"
 export API_URL="${API_URL:-http://localhost:8787}"
 export LOG_DIR="${LOG_DIR:-$repo/apps/worker/target/logs}"
+bash "$repo/apps/worker/scripts/install-pdfium.sh" >/dev/null
 exec cargo run --manifest-path "$repo/apps/worker/Cargo.toml"

@@ -321,7 +321,8 @@ export const WorkerClaimJobResponse = zod.object({
   "writeAudio": zod.object({
   "url": zod.string(),
   "headers": zod.record(zod.string(), zod.string()).describe('Headers the PUT must carry.')
-}).describe('A signed link to PUT one object.').optional().describe('Audio and video only: where to PUT the extracted audio track (Opus in Ogg).')
+}).describe('A signed link to PUT one object.').optional().describe('Audio and video only: where to PUT the extracted audio track (Opus in Ogg).'),
+  "visionPrompt": zod.string().optional().describe('PDF and images only: the vision model instruction from the Processing\'s Playbook edition.')
 }).describe('One Source to extract, leased to the worker until `leaseExpiresAt`.')
 
 
@@ -339,7 +340,12 @@ export const WorkerCompleteJobBody = zod.object({
   "method": zod.string().optional().describe('Success: how the text was extracted, e.g. xberg, pandoc, whisper, vision.'),
   "audioSaved": zod.boolean().optional().describe('Success, audio and video: the audio track was saved through `writeAudio`.'),
   "code": zod.string().optional().describe('Failure: a machine-readable code.'),
-  "reason": zod.string().optional().describe('Failure: the reason in Russian, shown to the Learner.')
+  "reason": zod.string().optional().describe('Failure: the reason in Russian, shown to the Learner.'),
+  "usage": zod.array(zod.object({
+  "model": zod.string().describe('Model id as sent to the provider.'),
+  "inputTokens": zod.int(),
+  "outputTokens": zod.int()
+}).describe('Tokens one model spent on a job; the API prices them and adds the cost to the Processing.')).optional().describe('Model calls of this attempt, on success and on failure alike.')
 })
 
 export const WorkerCompleteJobResponse = zod.void()

@@ -596,6 +596,11 @@ components:
         reason:
           type: string
           description: 'Failure: the reason in Russian, shown to the Learner.'
+        usage:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModelUsage'
+          description: Model calls of this attempt, on success and on failure alike.
     ConflictError:
       type: object
       required:
@@ -831,6 +836,23 @@ components:
         mark:
           $ref: '#/components/schemas/TopicMark'
       description: A Topic this Material touched.
+    ModelUsage:
+      type: object
+      required:
+        - model
+        - inputTokens
+        - outputTokens
+      properties:
+        model:
+          type: string
+          description: Model id as sent to the provider.
+        inputTokens:
+          type: integer
+          format: int64
+        outputTokens:
+          type: integer
+          format: int64
+      description: Tokens one model spent on a job; the API prices them and adds the cost to the Processing.
     NewSource:
       type: object
       required:
@@ -1080,6 +1102,9 @@ components:
           allOf:
             - $ref: '#/components/schemas/WriteLink'
           description: 'Audio and video only: where to PUT the extracted audio track (Opus in Ogg).'
+        visionPrompt:
+          type: string
+          description: "PDF and images only: the vision model instruction from the Processing's Playbook edition."
       description: One Source to extract, leased to the worker until `leaseExpiresAt`.
     WriteLink:
       type: object

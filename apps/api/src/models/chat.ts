@@ -33,7 +33,8 @@ const PRICES: Readonly<Record<string, { input: number; output: number }>> = {
 /** Pauses before the 1st, 2nd and 3rd retry. */
 const RETRY_PAUSES_MS = [1000, 4000, 16000];
 
-function costMicroUsd(model: string, inputTokens: number, outputTokens: number): number {
+/** Cost of one call in millionths of a dollar; also prices the worker's vision calls. */
+export function costMicroUsd(model: string, inputTokens: number, outputTokens: number): number {
   const price = PRICES[model];
   if (!price) {
     console.warn("No price for model", model);

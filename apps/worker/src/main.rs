@@ -4,16 +4,54 @@ mod api;
 mod config;
 mod document;
 mod log;
+mod pdf;
+mod photo;
+mod vision;
 
 use api::{Api, ApiError, Job, Outcome};
 use config::Config;
+use document::Extracted;
 use log::Log;
+use pdfium_render::prelude::Pdfium;
 use serde_json::json;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
+use vision::{Reading, Usage, Vision};
 
 const IDLE_PAUSE: Duration = Duration::from_secs(10);
 /// The API was deployed with another protocol: do not take jobs, look again later.
 const UPGRADE_PAUSE: Duration = Duration::from_secs(10 * 60);
+
+/// Learner-facing reasons of a failed Source.
+const PHOTO_UNREADABLE: &str = "не удалось прочитать фото: текст не разобрать";
+const PHOTO_FORMAT: &str = "формат фото не читается";
+const VISION_UNAVAILABLE: &str = "временная ошибка распознавания";
+const PDF_UNREADABLE: &str = "не удалось прочитать PDF";
+
+/// Why a Source failed: a code for the API, a reason for the Learner, details for the log.
+struct Failure {
+    code: &'static str,
+    reason: String,
+    detail: String,
+}
+
+impl Failure {
+    fn new(code: &'static str, reason: impl Into<String>, detail: impl Into<String>) -> Self {
+        Self {
+            code,
+            reason: reason.into(),
+            detail: detail.into(),
+        }
+    }
+}
+
+struct Worker {
+    api: Api,
+    http: reqwest::Client,
+    log: Log,
+    vision: Option<Vision>,
+    vision_model: String,
+    pdfium: Option<Arc<Pdfium>>,
+}
 
 #[tokio::main]
 async fn main() {
@@ -29,12 +67,37 @@ async fn main() {
         .connect_timeout(Duration::from_secs(20))
         .build()
         .expect("HTTP client");
-    let api = Api::new(http.clone(), &config.api_url, &config.worker_token);
-    log.info(
+    let pdfium = match pdf::load_pdfium(&config.pdfium_library) {
+        Ok(p) => Some(p),
+        Err(e) => {
+            log.error(
+                "pdfium is not available; not taking PDFs (run apps/worker/scripts/install-pdfium.sh)",
+                json!({ "error": e }),
+            );
+            None
+        }
+    };
+    let kinds = config.kinds(pdfium.is_some());
+    let worker = Worker {
+        api: Api::new(http.clone(), &config.api_url, &config.worker_token),
+        vision: config.deepinfra_api_key.as_deref().map(|key| {
+            Vision::new(
+                http.clone(),
+                &config.model_base_url,
+                key,
+                &config.vision_model,
+            )
+        }),
+        vision_model: config.vision_model.clone(),
+        http,
+        log,
+        pdfium,
+    };
+    worker.log.info(
         "worker started",
         json!({
             "api": config.api_url,
-            "kinds": config.kinds(),
+            "kinds": kinds,
             "modelKey": config.deepinfra_api_key.is_some(),
             "visionModel": config.vision_model,
             "asrModel": config.asr_model,
@@ -42,81 +105,235 @@ async fn main() {
     );
 
     loop {
-        match api.claim(&config.kinds()).await {
-            Ok(Some(job)) => run_job(&api, &http, &log, &job).await,
+        match worker.api.claim(&kinds).await {
+            Ok(Some(job)) => worker.run_job(&job).await,
             Ok(None) => tokio::time::sleep(IDLE_PAUSE).await,
             Err(ApiError::Upgrade(m)) => {
-                log.error(
+                worker.log.error(
                     "API protocol mismatch; not taking jobs",
                     json!({ "detail": m }),
                 );
                 tokio::time::sleep(UPGRADE_PAUSE).await;
             }
             Err(e) => {
-                log.error("claim failed", json!({ "error": e.to_string() }));
+                worker
+                    .log
+                    .error("claim failed", json!({ "error": e.to_string() }));
                 tokio::time::sleep(IDLE_PAUSE).await;
             }
         }
     }
 }
 
-/// One job at a time. Network trouble leaves the job alone: its lease expires and it is claimed again.
-async fn run_job(api: &Api, http: &reqwest::Client, log: &Log, job: &Job) {
-    let ids = json!({
-        "job": job.job_id,
-        "source": job.source_id,
-        "attempt": job.attempt,
-        "kind": job.kind,
-        "file": job.file_name,
-        "leaseExpiresAt": job.lease_expires_at,
-    });
-    log.info("job claimed", ids.clone());
+impl Worker {
+    /// One job at a time. Network trouble leaves the job alone: its lease expires and it is claimed again.
+    async fn run_job(&self, job: &Job) {
+        let ids = json!({
+            "job": job.job_id,
+            "source": job.source_id,
+            "attempt": job.attempt,
+            "kind": job.kind,
+            "file": job.file_name,
+            "leaseExpiresAt": job.lease_expires_at,
+        });
+        self.log.info("job claimed", ids.clone());
 
-    let bytes = match download(http, &job.read_url).await {
-        Ok(b) => b,
-        Err(e) => return log.error("download failed", json!({ "ids": ids, "error": e })),
-    };
+        let bytes = match download(&self.http, &job.read_url).await {
+            Ok(b) => b,
+            Err(e) => {
+                return self
+                    .log
+                    .error("download failed", json!({ "ids": ids, "error": e }));
+            }
+        };
 
-    let outcome = match job.kind.as_str() {
-        "document" => {
-            let mime = document::mime_for(&job.file_name, &job.mime_type);
-            match document::extract(bytes, &job.file_name, &mime).await {
-                Ok(text) => match upload(http, &job.write_text, text.markdown.into_bytes()).await {
-                    Ok(()) => Outcome::Success {
-                        method: text.method.to_owned(),
-                        audio_saved: None,
-                    },
-                    Err(e) => {
-                        return log.error("text upload failed", json!({ "ids": ids, "error": e }));
-                    }
-                },
-                Err(e) => {
-                    log.error(
-                        "document extraction failed",
-                        json!({ "ids": ids, "error": e }),
-                    );
-                    Outcome::Failure {
-                        code: "unreadable_document".to_owned(),
-                        reason: "не удалось прочитать документ".to_owned(),
-                    }
+        let mut usage = Usage {
+            model: self.vision_model.clone(),
+            input_tokens: 0,
+            output_tokens: 0,
+        };
+        let extracted = match job.kind.as_str() {
+            "document" => {
+                let mime = document::mime_for(&job.file_name, &job.mime_type);
+                document::extract(bytes, &job.file_name, &mime)
+                    .await
+                    .map_err(|e| {
+                        Failure::new("unreadable_document", "не удалось прочитать документ", e)
+                    })
+            }
+            "image" => self.read_photo(job, bytes, &mut usage).await,
+            "pdf" => self.read_pdf(job, bytes, &mut usage).await,
+            other => Err(Failure::new(
+                "unsupported_kind",
+                format!("этот worker пока не умеет обрабатывать файлы вида «{other}»"),
+                "",
+            )),
+        };
+
+        let outcome = match extracted {
+            Ok(text) => {
+                if let Err(e) =
+                    upload(&self.http, &job.write_text, text.markdown.into_bytes()).await
+                {
+                    return self
+                        .log
+                        .error("text upload failed", json!({ "ids": ids, "error": e }));
+                }
+                Outcome::Success {
+                    method: text.method.to_owned(),
+                    audio_saved: None,
                 }
             }
-        }
-        other => Outcome::Failure {
-            code: "unsupported_kind".to_owned(),
-            reason: format!("этот worker пока не умеет обрабатывать файлы вида «{other}»"),
-        },
-    };
+            Err(failure) => {
+                self.log.error(
+                    "extraction failed",
+                    json!({ "ids": ids, "code": failure.code, "error": failure.detail }),
+                );
+                Outcome::Failure {
+                    code: failure.code.to_owned(),
+                    reason: failure.reason,
+                }
+            }
+        };
 
-    match api.complete(job, &outcome).await {
-        Ok(()) => log.info(
-            "job completed",
-            json!({ "ids": ids, "outcome": outcome_name(&outcome) }),
-        ),
-        Err(e) => log.error(
-            "complete failed",
-            json!({ "ids": ids, "error": e.to_string() }),
-        ),
+        let spent = if usage.input_tokens + usage.output_tokens > 0 {
+            vec![usage]
+        } else {
+            vec![]
+        };
+        match self.api.complete(job, &outcome, &spent).await {
+            Ok(()) => self.log.info(
+                "job completed",
+                json!({ "ids": ids, "outcome": outcome_name(&outcome), "usage": spent }),
+            ),
+            Err(e) => self.log.error(
+                "complete failed",
+                json!({ "ids": ids, "error": e.to_string() }),
+            ),
+        }
+    }
+
+    /// The vision model and the Playbook instruction, which every picture needs.
+    fn vision_for<'a>(&'a self, job: &'a Job) -> Result<(&'a Vision, &'a str), Failure> {
+        let vision = self.vision.as_ref().ok_or_else(|| {
+            Failure::new(
+                "no_model_key",
+                VISION_UNAVAILABLE,
+                "DEEPINFRA_API_KEY is not set",
+            )
+        })?;
+        let prompt = job.vision_prompt.as_deref().ok_or_else(|| {
+            Failure::new(
+                "no_vision_prompt",
+                VISION_UNAVAILABLE,
+                "the job has no visionPrompt",
+            )
+        })?;
+        Ok((vision, prompt))
+    }
+
+    async fn read_photo(
+        &self,
+        job: &Job,
+        bytes: Vec<u8>,
+        usage: &mut Usage,
+    ) -> Result<Extracted, Failure> {
+        let (vision, prompt) = self.vision_for(job)?;
+        let bytes = if photo::is_heic(&job.file_name, &job.mime_type) {
+            photo::heic_to_jpeg(&bytes)
+                .await
+                .map_err(|e| Failure::new("photo_format", PHOTO_FORMAT, e))?
+        } else {
+            bytes
+        };
+        let jpeg = tokio::task::spawn_blocking(move || photo::prepare(&bytes))
+            .await
+            .map_err(|e| e.to_string())
+            .and_then(|r| r)
+            .map_err(|e| Failure::new("photo_format", PHOTO_FORMAT, e))?;
+        match vision.read(prompt, &jpeg, usage).await {
+            Ok(Reading::Text(markdown)) => Ok(Extracted {
+                markdown,
+                method: "vision",
+            }),
+            Ok(Reading::Unreadable) => Err(Failure::new(
+                "unreadable_photo",
+                PHOTO_UNREADABLE,
+                "the model found no text",
+            )),
+            Err(e) => Err(Failure::new("vision_unavailable", VISION_UNAVAILABLE, e)),
+        }
+    }
+
+    /// The text layer when it has enough text per page; otherwise every page through the vision model.
+    async fn read_pdf(
+        &self,
+        job: &Job,
+        bytes: Vec<u8>,
+        usage: &mut Usage,
+    ) -> Result<Extracted, Failure> {
+        let layer = document::with_xberg(bytes.clone(), &job.file_name, "application/pdf").await;
+        let pages = pdf::page_count(&bytes);
+        let why_scan = match (&layer, pages) {
+            (Ok(text), Some(n)) if !pdf::looks_scanned(text, n) => {
+                return Ok(Extracted {
+                    markdown: text.clone(),
+                    method: "xberg",
+                });
+            }
+            (Ok(_), Some(n)) => format!("text layer under the threshold for {n} pages"),
+            (Ok(_), None) => "xberg cannot count pages".to_owned(),
+            (Err(e), _) => format!("xberg: {e}"),
+        };
+        self.log.info(
+            "PDF goes to the vision model",
+            json!({ "source": job.source_id, "why": why_scan }),
+        );
+
+        let (vision, prompt) = self.vision_for(job)?;
+        let pdfium = self
+            .pdfium
+            .clone()
+            .ok_or_else(|| Failure::new("no_pdfium", VISION_UNAVAILABLE, "pdfium is not loaded"))?;
+        let mut rendered = pdf::render_pages(pdfium, bytes);
+        let mut parts = Vec::new();
+        while let Some(event) = rendered.recv().await {
+            let number = parts.len() + 1;
+            let page_failed = || format!("не удалось прочитать страницу {number}");
+            let jpeg = match event {
+                pdf::Rendered::Unopenable(e) => {
+                    return Err(Failure::new("unreadable_pdf", PDF_UNREADABLE, e));
+                }
+                pdf::Rendered::Page(Ok(jpeg)) => jpeg,
+                pdf::Rendered::Page(Err(e)) => {
+                    return Err(Failure::new("unrenderable_page", page_failed(), e));
+                }
+            };
+            match vision.read(prompt, &jpeg, usage).await {
+                Ok(Reading::Text(text)) => {
+                    parts.push(format!("<!-- страница {number} -->\n\n{text}"))
+                }
+                Ok(Reading::Unreadable) => {
+                    return Err(Failure::new(
+                        "unreadable_page",
+                        page_failed(),
+                        "the model found no text",
+                    ));
+                }
+                Err(e) => return Err(Failure::new("vision_unavailable", VISION_UNAVAILABLE, e)),
+            }
+        }
+        if parts.is_empty() {
+            return Err(Failure::new(
+                "unreadable_pdf",
+                PDF_UNREADABLE,
+                "the PDF has no pages",
+            ));
+        }
+        Ok(Extracted {
+            markdown: parts.join("\n\n"),
+            method: "vision",
+        })
     }
 }
 

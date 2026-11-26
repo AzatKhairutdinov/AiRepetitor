@@ -10,21 +10,23 @@ import {
   sourceExtraction,
 } from "@airepetitor/flows";
 import { isMedia } from "@airepetitor/formats";
-import { and, asc, eq, inArray, lt, or } from "drizzle-orm";
+import { and, asc, eq, inArray, lt, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import type {
   CompleteJobRequest,
   SourceKind,
   WorkerJob,
 } from "../../../../libs/contract/src/server/api.schemas.ts";
-import { flowTransition, job, source, sourceText } from "../db/schema.ts";
+import { flowTransition, job, material, source, sourceText } from "../db/schema.ts";
 import type { Env } from "../env.ts";
+import { costMicroUsd } from "../models/chat.ts";
+import { loadPlaybook } from "../playbook.ts";
 import type { Storage } from "../storage.ts";
 import { transitionRow } from "./flowStore.ts";
 import { instanceId } from "./queue.ts";
 
 /** Bump on any breaking change of the claim/complete protocol. */
-export const WORKER_PROTOCOL = "2";
+export const WORKER_PROTOCOL = "3";
 
 const LEASE_PER_MEDIA_HOUR_MS = 30 * 60 * 1000;
 const MIN_LEASE_MS = 30 * 60 * 1000;
@@ -52,6 +54,27 @@ function step(row: JobRow, event: SourceExtractionEvent) {
   const from = persisted(row);
   const { snapshot } = advanceFlow(sourceExtraction, from, event);
   return { from, to: snapshot as PersistedFlow<SourceExtractionContext> };
+}
+
+/** Kinds the worker reads with the vision model (scanned PDF pages and photos). */
+const VISION_KINDS: readonly SourceKind[] = ["pdf", "image"];
+
+/** The vision instruction of the Playbook edition this Material's Processing fixed. */
+async function visionPrompt(env: Env, materialId: string): Promise<string> {
+  const [row] = await drizzle(env.DB)
+    .select({ edition: material.playbookEdition })
+    .from(material)
+    .where(eq(material.id, materialId));
+  if (!row?.edition) throw new Error(`Material ${materialId} has no Playbook edition`);
+  return (await loadPlaybook(env, row.edition)).file("content/worker/vision.md");
+}
+
+/** Sum of the worker's model calls, in millionths of a dollar. */
+function usageCost(usage: CompleteJobRequest["usage"]): number {
+  return (usage ?? []).reduce(
+    (sum, u) => sum + costMicroUsd(u.model, u.inputTokens, u.outputTokens),
+    0,
+  );
 }
 
 const textKey = (materialId: string, sourceId: string) => `texts/${materialId}/${sourceId}.md`;
@@ -271,6 +294,9 @@ export async function claimJob(
             writeAudio: await storage.writeLink(audioKey(src.materialId, src.id), "audio/ogg", ttl),
           }
         : {}),
+      ...(VISION_KINDS.includes(kind)
+        ? { visionPrompt: await visionPrompt(env, src.materialId) }
+        : {}),
     };
   }
   return null;
@@ -306,8 +332,9 @@ export async function completeJob(
     return { badRequest: "Source text was not uploaded" };
   }
 
-  // One transaction, so the job never looks finished without its Source and text.
+  // One transaction, so the job never looks finished without its Source, text and cost.
   const { from, to } = step(row, { type: ok ? "SUCCEED" : "FAIL" });
+  const cost = usageCost(body.usage);
   await d.batch([
     d
       .update(job)
@@ -331,6 +358,14 @@ export async function completeJob(
         event: ok ? "SUCCEED" : "FAIL",
       }),
     ),
+    ...(cost > 0
+      ? [
+          d
+            .update(material)
+            .set({ costMicroUsd: sql`${material.costMicroUsd} + ${cost}` })
+            .where(eq(material.id, src.materialId)),
+        ]
+      : []),
     ...(ok
       ? [
           d

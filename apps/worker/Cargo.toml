@@ -8,7 +8,15 @@ publish = false
 description = "Pulls Source extraction jobs from the AiRepetitor API and reports Source texts (ADR 0003)."
 
 [dependencies]
+base64 = "0.22"
 humantime = "2"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
+# The API level must match the pdfium build that scripts/install-pdfium.sh downloads.
+pdfium-render = { version = "0.9.6", default-features = false, features = [
+  "pdfium_8125",
+  "image_025",
+  "thread_safe",
+] }
 reqwest = { version = "0.13", default-features = false, features = ["json", "rustls", "http2"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

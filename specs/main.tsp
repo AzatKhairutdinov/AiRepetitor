@@ -355,11 +355,23 @@ model WorkerJob {
 
   /** Audio and video only: where to PUT the extracted audio track (Opus in Ogg). */
   writeAudio?: WriteLink;
+
+  /** PDF and images only: the vision model instruction from the Processing's Playbook edition. */
+  visionPrompt?: string;
 }
 
 model ClaimJobRequest {
   /** Source kinds this worker can extract; a worker without a model key leaves out images and media. */
   kinds: SourceKind[];
+}
+
+/** Tokens one model spent on a job; the API prices them and adds the cost to the Processing. */
+model ModelUsage {
+  /** Model id as sent to the provider. */
+  `model`: string;
+
+  inputTokens: int64;
+  outputTokens: int64;
 }
 
 union JobOutcome {
@@ -382,6 +394,9 @@ model CompleteJobRequest {
 
   /** Failure: the reason in Russian, shown to the Learner. */
   reason?: string;
+
+  /** Model calls of this attempt, on success and on failure alike. */
+  usage?: ModelUsage[];
 }
 
 @route("/worker")

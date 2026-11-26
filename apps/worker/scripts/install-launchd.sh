@@ -13,6 +13,7 @@ plist="$HOME/Library/LaunchAgents/$label.plist"
 log_dir="$HOME/Library/Logs/AiRepetitor"
 
 command -v pandoc >/dev/null || echo "note: pandoc is not in PATH; the fallback for documents needs it (brew install pandoc)"
+bash "$repo/apps/worker/scripts/install-pdfium.sh"
 
 echo "building the worker…"
 cargo build --release --manifest-path "$repo/apps/worker/Cargo.toml"
@@ -28,6 +29,9 @@ API_URL=http://localhost:8787
 WORKER_TOKEN=
 # Optional: without it the worker takes only documents.
 DEEPINFRA_API_KEY=
+# Optional: vision model id on the provider and the OpenAI-compatible base URL.
+# VISION_MODEL=Qwen/Qwen3-VL-30B-A3B-Instruct
+# MODEL_BASE_URL=https://api.deepinfra.com/v1/openai
 ENV
   echo "created $env_file — fill in WORKER_TOKEN, then run this script again"
   exit 0
