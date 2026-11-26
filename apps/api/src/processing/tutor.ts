@@ -20,6 +20,7 @@ import {
   loadInput,
   resolveLabels,
   sourcesBlock,
+  previousVersion,
 } from "./context.ts";
 
 function readTopics(answer: unknown): ProposedTopic[] {
@@ -99,20 +100,31 @@ export async function commitTopics(
     .where(eq(material.id, materialId));
   if (!m || proposal.length === 0) return { type: "TOPICS_COMMITTED", count: 0 };
 
-  // Every Topic is new in this version; extending a known Topic arrives with its own ticket.
-  const rows = proposal.map((t) => ({
-    id: crypto.randomUUID(),
-    profileId: m.profileId,
-    title: t.title,
-    description: t.description,
-  }));
-  await d.batch([
-    d.insert(topic).values(rows),
-    d
-      .insert(materialTopic)
-      .values(rows.map((t, position) => ({ materialId, topicId: t.id, mark: "new", position }))),
-  ]);
-  return { type: "TOPICS_COMMITTED", count: rows.length };
+  // A Topic the Profile already has is extended, not repeated; anything else is new.
+  const known = new Set(
+    (await d.select({ id: topic.id }).from(topic).where(eq(topic.profileId, m.profileId))).map(
+      (t) => t.id,
+    ),
+  );
+  const fresh: (typeof topic.$inferInsert)[] = [];
+  const links: { topicId: string; mark: "new" | "extended" }[] = [];
+  for (const t of proposal) {
+    if (t.existingTopicId && known.has(t.existingTopicId)) {
+      if (!links.some((l) => l.topicId === t.existingTopicId))
+        links.push({ topicId: t.existingTopicId, mark: "extended" });
+      continue;
+    }
+    const id = crypto.randomUUID();
+    fresh.push({ id, profileId: m.profileId, title: t.title, description: t.description });
+    links.push({ topicId: id, mark: "new" });
+  }
+  // Topics before the links that reference them (foreign keys), in one transaction.
+  const link = d
+    .insert(materialTopic)
+    .values(links.map((l, position) => ({ materialId, ...l, position })));
+  if (fresh.length > 0) await d.batch([d.insert(topic).values(fresh), link]);
+  else await link;
+  return { type: "TOPICS_COMMITTED", count: links.length };
 }
 
 /** Topics of this Material in the Tutor's order, for the per-Topic flows. */
@@ -131,7 +143,7 @@ async function loadTopic(env: Env, topicId: string) {
   return t;
 }
 
-/** «Черновик Конспекта» for one Topic. */
+/** «Черновик Конспекта»: version 1 of a new Topic, or the next version of a known one. */
 export async function writeDraft(
   env: Env,
   materialId: string,
@@ -139,6 +151,9 @@ export async function writeDraft(
 ): Promise<TopicDigestEvent> {
   const input = await loadInput(env, materialId);
   const t = await loadTopic(env, topicId);
+  const previous = await previousVersion(env, topicId, materialId);
+  const labels = [...input.sources, ...(previous?.labels ?? [])];
+  const instruction = previous ? "content/tutor/digest-update.md" : "content/tutor/digest.md";
   try {
     const markdown = await ask(
       env,
@@ -147,16 +162,26 @@ export async function writeDraft(
       [
         {
           role: "system",
-          content: `${fill(input.playbook.file("content/tutor/digest.md"), input.language)}\n\n${digestRules(input.playbook)}`,
+          content: `${fill(input.playbook.file(instruction), input.language)}\n\n${digestRules(input.playbook)}`,
         },
         {
           role: "user",
-          content: `Тема: ${t.title}\nОписание: ${t.description}\n\n${sourcesBlock(input.sources)}`,
+          content: [
+            `Тема: ${t.title}\nОписание: ${t.description}`,
+            previous
+              ? `Прошлая версия Конспекта (${previous.number}):\n\n${labelSources(previous.markdown, labels)}`
+              : "",
+            previous
+              ? `Новые ${sourcesBlock(input.sources).replace(/^М/, "м")}`
+              : sourcesBlock(input.sources),
+          ]
+            .filter(Boolean)
+            .join("\n\n"),
         },
       ],
       false,
     );
-    return { type: "DRAFTED", markdown: resolveLabels(markdown.trim(), input.sources) };
+    return { type: "DRAFTED", markdown: resolveLabels(markdown.trim(), labels) };
   } catch (error) {
     console.error("Tutor could not write the digest", materialId, topicId, error);
     return { type: "MODEL_FAILED" };
@@ -173,6 +198,8 @@ export async function reviseDraft(
 ): Promise<TopicDigestEvent> {
   const input = await loadInput(env, materialId);
   const t = await loadTopic(env, topicId);
+  const previous = await previousVersion(env, topicId, materialId);
+  const labels = [...input.sources, ...(previous?.labels ?? [])];
   try {
     const markdown = await ask(
       env,
@@ -188,14 +215,14 @@ export async function reviseDraft(
           content: [
             `Тема: ${t.title}\nОписание: ${t.description}`,
             `Замечания:\n${remarks.map((r, i) => `${i + 1}. ${r}`).join("\n")}`,
-            `Конспект:\n\n${labelSources(draft, input.sources)}`,
+            `Конспект:\n\n${labelSources(draft, labels)}`,
             sourcesBlock(input.sources),
           ].join("\n\n"),
         },
       ],
       false,
     );
-    return { type: "DRAFTED", markdown: resolveLabels(markdown.trim(), input.sources) };
+    return { type: "DRAFTED", markdown: resolveLabels(markdown.trim(), labels) };
   } catch (error) {
     console.error("Tutor could not revise the digest", materialId, topicId, error);
     return { type: "MODEL_FAILED" };

@@ -1,9 +1,9 @@
 // What the Tutor and the Methodologist read in one Processing: the Material's Source texts,
 // the Profile's language and the Playbook edition fixed at the start.
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import type { LanguageCode } from "../../../../libs/contract/src/server/api.schemas.ts";
-import { material, profile, source, sourceText } from "../db/schema.ts";
+import { digestVersion, material, profile, source, sourceText } from "../db/schema.ts";
 import type { Env } from "../env.ts";
 import { languageName } from "../languages.ts";
 import { type ChatMessage, type ModelConfig, chat } from "../models/chat.ts";
@@ -69,7 +69,7 @@ export const fill = (template: string, language: string) =>
 /** Turns the Tutor's `[S1]` labels into `[[source:<id>]]`; unknown labels stay as they are. */
 export function resolveLabels(markdown: string, sources: LabelledSource[]): string {
   const byLabel = new Map(sources.map((s) => [s.label, s.id]));
-  return markdown.replace(/\[(S\d+)\]/g, (whole, label: string) => {
+  return markdown.replace(/\[([SP]\d+)\]/g, (whole, label: string) => {
     const id = byLabel.get(label);
     return id ? `[[source:${id}]]` : whole;
   });
@@ -110,4 +110,50 @@ export function digestRules(p: Playbook): string {
     `# Запретные слова\n\n${p.checks.forbiddenWords.join(", ")}`,
     `# Глоссарий\n\n${p.file("GLOSSARY.md")}`,
   ].join("\n\n");
+}
+
+/** The Topic's latest Digest version written by an earlier Material, if any. */
+export interface PreviousVersion {
+  number: number;
+  markdown: string;
+  sourceMaterialIds: string[];
+  /** Sources the previous version cites, labelled `P1`, `P2`, … (their texts are not re-read). */
+  labels: LabelledSource[];
+}
+
+export async function previousVersion(
+  env: Env,
+  topicId: string,
+  materialId: string,
+): Promise<PreviousVersion | null> {
+  const [last] = await drizzle(env.DB)
+    .select()
+    .from(digestVersion)
+    .where(and(eq(digestVersion.topicId, topicId), ne(digestVersion.materialId, materialId)))
+    .orderBy(desc(digestVersion.number))
+    .limit(1);
+  if (!last) return null;
+  const ids = [
+    ...new Set([...last.markdown.matchAll(/\[\[source:([\w-]+)\]\]/g)].map((m) => m[1]!)),
+  ];
+  return {
+    number: last.number,
+    markdown: last.markdown,
+    sourceMaterialIds: JSON.parse(last.sourceMaterialIds),
+    labels: ids.map((id, i) => ({ id, label: `P${i + 1}`, fileName: "", text: "" })),
+  };
+}
+
+/** Source ids a Digest of this Processing may cite: this Material's and the previous version's. */
+export async function citableSourceIds(
+  env: Env,
+  materialId: string,
+  previous: PreviousVersion | null,
+) {
+  const materials = [materialId, ...(previous?.sourceMaterialIds ?? [])];
+  const rows = await drizzle(env.DB)
+    .select({ id: source.id })
+    .from(source)
+    .where(inArray(source.materialId, materials));
+  return new Set(rows.map((r) => r.id));
 }

@@ -7,7 +7,8 @@
 - `tutor/topics.md` — инструкция Репетитора «деление на Темы».
 - `tutor/digest.md` — инструкция Репетитора «Конспект».
 - `tutor/revise.md` — инструкция Репетитора «правка Конспекта».
-- `methodologist/digest.md`, `methodologist/topics.md` — инструкции Методиста.
+- `tutor/digest-update.md` — инструкция Репетитора «новая версия Конспекта».
+- `methodologist/digest.md`, `methodologist/digest-update.md`, `methodologist/topics.md` — инструкции Методиста.
 - `checks.yaml` — Проверки кодом; схема — модель `CodeChecks` в `specs/main.tsp`.
 - Глоссарий — `GLOSSARY.md` в корне репозитория, входит в Методичку как есть.
 

@@ -9,11 +9,20 @@ import type {
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { runCodeChecks } from "../checks.ts";
-import { checkReport, source, topic } from "../db/schema.ts";
+import { checkReport, topic } from "../db/schema.ts";
 import type { Env } from "../env.ts";
 import { parseJson } from "../models/chat.ts";
 import { methodologistModel } from "../models/roles.ts";
-import { ask, digestRules, fill, labelSources, loadInput, sourcesBlock } from "./context.ts";
+import {
+  ask,
+  citableSourceIds,
+  digestRules,
+  fill,
+  labelSources,
+  loadInput,
+  previousVersion,
+  sourcesBlock,
+} from "./context.ts";
 
 const KINDS = new Set<ReviewError["kind"]>([
   "факт",
@@ -58,11 +67,12 @@ export async function checkDraft(
   round: number,
 ): Promise<TopicDigestEvent> {
   const input = await loadInput(env, materialId);
-  const ids = await drizzle(env.DB)
-    .select({ id: source.id })
-    .from(source)
-    .where(eq(source.materialId, materialId));
-  const violations = runCodeChecks(draft, input.playbook.checks, new Set(ids.map((s) => s.id)));
+  const previous = await previousVersion(env, topicId, materialId);
+  const violations = runCodeChecks(
+    draft,
+    input.playbook.checks,
+    await citableSourceIds(env, materialId, previous),
+  );
   await saveReport(env, {
     materialId,
     topicId,
@@ -85,6 +95,11 @@ export async function reviewDigest(
 ): Promise<TopicDigestEvent> {
   const input = await loadInput(env, materialId);
   const [t] = await drizzle(env.DB).select().from(topic).where(eq(topic.id, topicId));
+  const previous = await previousVersion(env, topicId, materialId);
+  const labels = [...input.sources, ...(previous?.labels ?? [])];
+  const instruction = previous
+    ? "content/methodologist/digest-update.md"
+    : "content/methodologist/digest.md";
   try {
     const answer = await ask(
       env,
@@ -93,7 +108,7 @@ export async function reviewDigest(
       [
         {
           role: "system",
-          content: `${fill(input.playbook.file("content/methodologist/digest.md"), input.language)}\n\n${digestRules(input.playbook)}`,
+          content: `${fill(input.playbook.file(instruction), input.language)}\n\n${digestRules(input.playbook)}`,
         },
         {
           role: "user",
@@ -102,7 +117,10 @@ export async function reviewDigest(
             violations.length
               ? `Нарушения Проверок кодом, которые остались:\n${violations.join("\n")}`
               : "",
-            `Конспект:\n\n${labelSources(draft, input.sources)}`,
+            previous
+              ? `Прошлая проверенная версия (${previous.number}):\n\n${labelSources(previous.markdown, labels)}`
+              : "",
+            `${previous ? "Новая версия" : "Конспект"}:\n\n${labelSources(draft, labels)}`,
             sourcesBlock(input.sources),
           ]
             .filter(Boolean)

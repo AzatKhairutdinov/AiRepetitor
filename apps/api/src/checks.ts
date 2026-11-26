@@ -3,7 +3,7 @@
 import type { CodeChecks } from "../../../libs/contract/src/server/api.schemas.ts";
 
 const LABEL = /\[\[source:([\w-]+)\]\]/g;
-const RAW_LABEL = /\[S\d+\]/g;
+const RAW_LABEL = /\[[SP]\d+\]/g;
 
 /** Markdown to plain text: no labels, links, emphasis or code marks. */
 const plain = (line: string) =>
