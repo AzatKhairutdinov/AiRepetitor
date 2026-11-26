@@ -34,6 +34,12 @@ model BadRequestError {
 }
 
 @error
+model ForbiddenError {
+  @statusCode _: 403;
+  message: string;
+}
+
+@error
 model UpgradeRequiredError {
   @statusCode _: 426;
   message: string;
@@ -313,3 +319,23 @@ interface Worker {
     | ConflictError
     | UpgradeRequiredError;
 }
+
+// --- Team ---------------------------------------------------------------------
+// Only the "team" role; others get 403.
+
+/** One Processing scenario; the diagram itself is drawn from libs/flows. */
+model FlowSummary {
+  /** Machine id in libs/flows. */
+  id: string;
+
+  title: string;
+  version: int32;
+}
+
+model FlowList {
+  items: FlowSummary[];
+}
+
+@route("/team/flows")
+@get
+op teamListFlows(): FlowList | UnauthorizedError | ForbiddenError;

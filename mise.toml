@@ -83,6 +83,10 @@ run = "bash apps/worker/scripts/dev.sh"
 description = "Install the worker as a launchd agent (macOS)"
 run = "bash apps/worker/scripts/install-launchd.sh"
 
+[tasks."team:grant"]
+description = "Give an account the Team role: mise run team:grant <email>"
+run = "bash scripts/team-grant.sh"
+
 [tasks."db:generate"]
 description = "Generate a SQL migration from apps/api/src/db/schema.ts"
 run = "pnpm --filter @airepetitor/api exec drizzle-kit generate"

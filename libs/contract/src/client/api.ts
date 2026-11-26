@@ -12,6 +12,8 @@ import type {
   CreateMaterialRequest,
   CreateProfileRequest,
   CreatedMaterial,
+  FlowList,
+  ForbiddenError,
   Health,
   LanguageList,
   Material,
@@ -497,6 +499,58 @@ export const profileMaterialsCreateMaterial = async (profileId: string,
 
   const data: profileMaterialsCreateMaterialResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as profileMaterialsCreateMaterialResponse
+}
+
+
+
+export type teamListFlowsResponse200 = {
+  data: FlowList
+  status: 200
+}
+
+export type teamListFlowsResponse401 = {
+  data: UnauthorizedError
+  status: 401
+}
+
+export type teamListFlowsResponse403 = {
+  data: ForbiddenError
+  status: 403
+}
+
+export type teamListFlowsResponseSuccess = (teamListFlowsResponse200) & {
+  headers: Headers;
+};
+export type teamListFlowsResponseError = (teamListFlowsResponse401 | teamListFlowsResponse403) & {
+  headers: Headers;
+};
+
+export type teamListFlowsResponse = (teamListFlowsResponseSuccess | teamListFlowsResponseError)
+
+export const getTeamListFlowsUrl = () => {
+
+
+
+
+  return `/team/flows`
+}
+
+export const teamListFlows = async ( options?: RequestInit): Promise<teamListFlowsResponse> => {
+
+  const res = await fetch(getTeamListFlowsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: teamListFlowsResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as teamListFlowsResponse
 }
 
 

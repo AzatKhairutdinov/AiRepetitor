@@ -5,8 +5,11 @@
   "type": "module",
   "dependencies": {
     "@airepetitor/contract": "workspace:*",
+    "@airepetitor/flows": "workspace:*",
     "@airepetitor/formats": "workspace:*",
+    "@xyflow/react": "^13.0.3",
     "better-auth": "^1.7.27",
+    "elkjs": "^0.12.1",
     "react": "*",
     "react-dom": "*",
     "react-router": "^8.5.3"
