@@ -251,18 +251,14 @@ impl Worker {
             .map_err(|e| e.to_string())
             .and_then(|r| r)
             .map_err(|e| Failure::new("photo_format", PHOTO_FORMAT, e))?;
-        match vision.read(prompt, &jpeg, usage).await {
-            Ok(Reading::Text(markdown)) => Ok(Extracted {
-                markdown,
-                method: "vision",
-            }),
-            Ok(Reading::Unreadable) => Err(Failure::new(
-                "unreadable_photo",
-                PHOTO_UNREADABLE,
-                "the model found no text",
-            )),
-            Err(e) => Err(Failure::new("vision_unavailable", VISION_UNAVAILABLE, e)),
-        }
+        let markdown = read_picture(vision, prompt, &jpeg, usage, "unreadable_photo", || {
+            PHOTO_UNREADABLE.to_owned()
+        })
+        .await?;
+        Ok(Extracted {
+            markdown,
+            method: "vision",
+        })
     }
 
     /// The text layer when it has enough text per page; otherwise every page through the vision model.
@@ -309,19 +305,9 @@ impl Worker {
                     return Err(Failure::new("unrenderable_page", page_failed(), e));
                 }
             };
-            match vision.read(prompt, &jpeg, usage).await {
-                Ok(Reading::Text(text)) => {
-                    parts.push(format!("<!-- страница {number} -->\n\n{text}"))
-                }
-                Ok(Reading::Unreadable) => {
-                    return Err(Failure::new(
-                        "unreadable_page",
-                        page_failed(),
-                        "the model found no text",
-                    ));
-                }
-                Err(e) => return Err(Failure::new("vision_unavailable", VISION_UNAVAILABLE, e)),
-            }
+            let text =
+                read_picture(vision, prompt, &jpeg, usage, "unreadable_page", page_failed).await?;
+            parts.push(format!("<!-- страница {number} -->\n\n{text}"));
         }
         if parts.is_empty() {
             return Err(Failure::new(
@@ -334,6 +320,26 @@ impl Worker {
             markdown: parts.join("\n\n"),
             method: "vision",
         })
+    }
+}
+
+/// One picture through the vision model; no text becomes `unreadable_code` with the given reason.
+async fn read_picture(
+    vision: &Vision,
+    prompt: &str,
+    jpeg: &[u8],
+    usage: &mut Usage,
+    unreadable_code: &'static str,
+    unreadable_reason: impl FnOnce() -> String,
+) -> Result<String, Failure> {
+    match vision.read(prompt, jpeg, usage).await {
+        Ok(Reading::Text(text)) => Ok(text),
+        Ok(Reading::Unreadable) => Err(Failure::new(
+            unreadable_code,
+            unreadable_reason(),
+            "the model found no text",
+        )),
+        Err(e) => Err(Failure::new("vision_unavailable", VISION_UNAVAILABLE, e)),
     }
 }
 

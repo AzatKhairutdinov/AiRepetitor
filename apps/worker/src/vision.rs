@@ -81,13 +81,14 @@ impl Vision {
             }
             match self.call(&body, usage).await {
                 Ok(text) => return Ok(classify(&text)),
-                Err(e) => last_error = e,
+                Err(CallError::Final(e)) => return Err(format!("{}: {e}", self.model)),
+                Err(CallError::Retryable(e)) => last_error = e,
             }
         }
         Err(format!("{}: {last_error}", self.model))
     }
 
-    async fn call(&self, body: &serde_json::Value, usage: &mut Usage) -> Result<String, String> {
+    async fn call(&self, body: &serde_json::Value, usage: &mut Usage) -> Result<String, CallError> {
         let res = self
             .http
             .post(format!("{}/chat/completions", self.base_url))
@@ -96,23 +97,43 @@ impl Vision {
             .json(body)
             .send()
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| CallError::Retryable(e.to_string()))?;
         let status = res.status();
         if !status.is_success() {
             let text = res.text().await.unwrap_or_default();
-            return Err(format!(
+            let message = format!(
                 "HTTP {status}: {}",
                 text.chars().take(300).collect::<String>()
-            ));
+            );
+            // The same rule as the API's model client: only rate limits and server errors pass.
+            return Err(if status.as_u16() == 429 || status.is_server_error() {
+                CallError::Retryable(message)
+            } else {
+                CallError::Final(message)
+            });
         }
-        let answer: serde_json::Value = res.json().await.map_err(|e| e.to_string())?;
+        let answer: serde_json::Value = res
+            .json()
+            .await
+            .map_err(|e| CallError::Retryable(e.to_string()))?;
         usage.input_tokens += answer["usage"]["prompt_tokens"].as_u64().unwrap_or(0);
         usage.output_tokens += answer["usage"]["completion_tokens"].as_u64().unwrap_or(0);
-        Ok(answer["choices"][0]["message"]["content"]
-            .as_str()
-            .unwrap_or_default()
-            .to_owned())
+        let message = &answer["choices"][0]["message"];
+        if !message.is_object() {
+            return Err(CallError::Retryable(format!(
+                "no choices in the answer: {}",
+                answer.to_string().chars().take(300).collect::<String>()
+            )));
+        }
+        Ok(message["content"].as_str().unwrap_or_default().to_owned())
     }
+}
+
+enum CallError {
+    /// Network, rate limit, server error or a malformed answer: worth another try.
+    Retryable(String),
+    /// A client error such as a bad key or a rejected image: another try gives the same.
+    Final(String),
 }
 
 fn classify(answer: &str) -> Reading {
