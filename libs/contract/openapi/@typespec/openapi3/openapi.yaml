@@ -54,6 +54,35 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NotFoundError'
+  /materials/{materialId}/messages:
+    get:
+      operationId: Materials_listMessages
+      description: The Chat of the Material, oldest Message first.
+      parameters:
+        - name: materialId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageList'
+        '401':
+          description: Access is unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
   /materials/{materialId}/retry:
     post:
       operationId: Materials_retryMaterial
@@ -836,6 +865,38 @@ components:
         mark:
           $ref: '#/components/schemas/TopicMark'
       description: A Topic this Material touched.
+    Message:
+      type: object
+      required:
+        - id
+        - author
+        - text
+        - createdAt
+      properties:
+        id:
+          type: string
+        author:
+          $ref: '#/components/schemas/MessageAuthor'
+        text:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      description: One Message in the Chat of a Material; for now only the Tutor writes.
+    MessageAuthor:
+      type: string
+      enum:
+        - tutor
+        - learner
+    MessageList:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
     ModelUsage:
       type: object
       required:

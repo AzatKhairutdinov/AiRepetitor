@@ -283,6 +283,28 @@ export interface MaterialList {
   items: MaterialSummary[];
 }
 
+export type MessageAuthor = typeof MessageAuthor[keyof typeof MessageAuthor];
+
+
+export const MessageAuthor = {
+  tutor: 'tutor',
+  learner: 'learner',
+} as const;
+
+/**
+ * One Message in the Chat of a Material; for now only the Tutor writes.
+ */
+export interface Message {
+  id: string;
+  author: MessageAuthor;
+  text: string;
+  createdAt: string;
+}
+
+export interface MessageList {
+  items: Message[];
+}
+
 export interface NotFoundError {
   message: string;
 }

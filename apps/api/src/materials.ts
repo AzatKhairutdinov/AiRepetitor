@@ -14,12 +14,22 @@ import type {
   Material,
   MaterialStatus,
   MaterialSummary,
+  MessageAuthor,
+  MessageList,
   Source,
   SourceKind,
   SourceStatus,
   TopicMark,
 } from "../../../libs/contract/src/server/api.schemas.ts";
-import { material, materialFlow, materialTopic, profile, source, topic } from "./db/schema.ts";
+import {
+  material,
+  materialFlow,
+  materialTopic,
+  message,
+  profile,
+  source,
+  topic,
+} from "./db/schema.ts";
 import type { Env } from "./env.ts";
 import { startNextMaterial } from "./processing/queue.ts";
 import type { Storage } from "./storage.ts";
@@ -104,6 +114,29 @@ export async function getMaterial(env: Env, userId: string, materialId: string) 
   const d = db(env);
   const row = await ownedMaterial(d, userId, materialId);
   return row ? withSources(d, row) : null;
+}
+
+/** The Chat of an owned Material, oldest first; null when the Material is not the user's. */
+export async function listMessages(
+  env: Env,
+  userId: string,
+  materialId: string,
+): Promise<MessageList | null> {
+  const d = db(env);
+  if (!(await ownedMaterial(d, userId, materialId))) return null;
+  const rows = await d
+    .select()
+    .from(message)
+    .where(eq(message.materialId, materialId))
+    .orderBy(asc(message.createdAt), asc(message.id));
+  return {
+    items: rows.map((r) => ({
+      id: r.id,
+      author: r.author as MessageAuthor,
+      text: r.text,
+      createdAt: r.createdAt.toISOString(),
+    })),
+  };
 }
 
 export type CreateResult =

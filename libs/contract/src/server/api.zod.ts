@@ -48,6 +48,20 @@ export const MaterialsGetMaterialResponse = zod.object({
 })
 
 
+export const MaterialsListMessagesParams = zod.object({
+  "materialId": zod.string()
+})
+
+export const MaterialsListMessagesResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.string(),
+  "author": zod.enum(['tutor', 'learner']),
+  "text": zod.string(),
+  "createdAt": zod.iso.datetime({"offset":true})
+}).describe('One Message in the Chat of a Material; for now only the Tutor writes.'))
+})
+
+
 export const MaterialsRetryMaterialParams = zod.object({
   "materialId": zod.string()
 })
