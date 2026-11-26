@@ -4,7 +4,6 @@
 use serde_json::{Value, json};
 use std::{
     collections::HashMap,
-    io::Read,
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     sync::{Arc, Mutex},
