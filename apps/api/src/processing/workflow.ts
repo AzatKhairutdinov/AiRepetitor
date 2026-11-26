@@ -43,8 +43,8 @@ interface Params {
 
 type FlowEvent = { type: string };
 
-/** Long enough for a laptop that is off over a long weekend. */
-const WORKER_TIMEOUT = "30 days";
+/** Long enough for a laptop that is off over a long weekend: this many daily looks at D1. */
+const WORKER_WAIT_DAYS = 30;
 
 /** The longest wait Workflows allow; «Повторить» waits for as many of these as it takes. */
 const LEARNER_TIMEOUT = "365 days";
@@ -77,8 +77,11 @@ interface FlowSpec {
   >;
   /** Workflow event to wait for when no action answered, or null. */
   awaited?: (context: unknown) => string | null;
-  /** Turns a received event into the machine's event; null ignores it (runs inside a step). */
-  confirm?: (received: FlowEvent) => Promise<FlowEvent | null>;
+  /**
+   * The awaited result as D1 has it, or null while there is none (runs inside a step). Checked
+   * after each event and once a day, so a stale event is ignored and a lost one is not waited for.
+   */
+  confirm?: (context: unknown) => Promise<FlowEvent | null>;
   /** In a state tagged WAITS_FOR_LEARNER: waits for the Learner and returns the machine's event. */
   waitForLearner?: (context: unknown, key: string) => Promise<FlowEvent>;
   save: (from: FlowStep | null, to: FlowStep, event: string) => Promise<unknown>;
@@ -89,16 +92,17 @@ export class MaterialProcessing extends WorkflowEntrypoint<Env, Params> {
     const { materialId } = event.payload;
     const env = this.env;
 
+    /** A step whose result is JSON text: snapshots and events carry machine-specific shapes. */
+    const stepJson = async <T>(name: string, run: () => Promise<T>): Promise<T> =>
+      JSON.parse(await step.do(name, async () => JSON.stringify((await run()) ?? null))) as T;
+
     /** The generic loop: actions → steps, waits → waitForEvent, transition() outside steps. */
     const runFlow = async (spec: FlowSpec): Promise<FlowStep> => {
-      // Step results are JSON text: snapshots carry machine-specific context.
-      let current: FlowStep = JSON.parse(
-        await step.do(`${spec.prefix}start`, async () => {
-          const started = startFlow(spec.machine, spec.input as never);
-          await spec.save(null, started, "START");
-          return JSON.stringify(started);
-        }),
-      );
+      let current = await stepJson(`${spec.prefix}start`, async () => {
+        const started = startFlow(spec.machine, spec.input as never);
+        await spec.save(null, started, "START");
+        return started;
+      });
       for (let n = 0; ; n++) {
         let reply: FlowEvent | null = null;
         for (const [k, action] of current.actions.entries()) {
@@ -108,9 +112,7 @@ export class MaterialProcessing extends WorkflowEntrypoint<Env, Params> {
           const key = `${spec.prefix}${n}-${k}-${action.type}`;
           const result =
             "step" in run
-              ? (JSON.parse(
-                  await step.do(key, async () => JSON.stringify((await run.step(context)) ?? null)),
-                ) as FlowEvent | null)
+              ? await stepJson(key, async () => (await run.step(context)) ?? null)
               : ((await run.flow(context, key)) ?? null);
           reply = result ?? reply;
         }
@@ -125,21 +127,24 @@ export class MaterialProcessing extends WorkflowEntrypoint<Env, Params> {
           const type = spec.awaited?.(current.snapshot.context);
           if (!type) throw new Error(`${spec.machine.id} is stuck in ${current.snapshot.value}`);
           const { confirm } = spec;
+          const context = current.snapshot.context;
           let confirmed: FlowEvent | null = null;
-          // A stale event is ignored: wait again under the next step name.
-          for (let w = 0; !confirmed; w++) {
-            const name = `${spec.prefix}${n}-wait-${type}${w === 0 ? "" : `-${w}`}`;
-            const received = await step.waitForEvent<FlowEvent>(name, {
-              type,
-              timeout: WORKER_TIMEOUT,
-            });
+          for (let day = 0; !confirmed; day++) {
+            const name = `${spec.prefix}${n}-wait-${type}${day === 0 ? "" : `-${day}`}`;
+            let received: FlowEvent | null = null;
+            try {
+              received = (
+                await step.waitForEvent<FlowEvent>(name, {
+                  type,
+                  timeout: confirm ? "1 day" : `${WORKER_WAIT_DAYS} days`,
+                })
+              ).payload;
+            } catch (timeout) {
+              if (!confirm || day + 1 >= WORKER_WAIT_DAYS) throw timeout;
+            }
             confirmed = confirm
-              ? (JSON.parse(
-                  await step.do(`${name}-confirm`, async () =>
-                    JSON.stringify(await confirm(received.payload)),
-                  ),
-                ) as FlowEvent | null)
-              : received.payload;
+              ? await stepJson(`${name}-confirm`, () => confirm(context))
+              : received;
           }
           next = confirmed;
         }
@@ -215,16 +220,14 @@ export class MaterialProcessing extends WorkflowEntrypoint<Env, Params> {
           .set({ playbookEdition: edition })
           .where(eq(material.id, materialId));
       });
-      const sourceIds: string[] = JSON.parse(
-        await step.do("sources", async () => {
-          const rows = await drizzle(env.DB)
-            .select({ id: source.id })
-            .from(source)
-            .where(eq(source.materialId, materialId))
-            .orderBy(asc(source.position));
-          return JSON.stringify(rows.map((r) => r.id));
-        }),
-      );
+      const sourceIds = await stepJson("sources", async () => {
+        const rows = await drizzle(env.DB)
+          .select({ id: source.id })
+          .from(source)
+          .where(eq(source.materialId, materialId))
+          .orderBy(asc(source.position));
+        return rows.map((r) => r.id);
+      });
 
       final = await runFlow({
         machine: materialProcessing,
@@ -242,10 +245,8 @@ export class MaterialProcessing extends WorkflowEntrypoint<Env, Params> {
           writeDigests: {
             flow: async (c, key) => {
               // After «Повторить», Topics whose Digest this Material already wrote are skipped.
-              const topicIds: string[] = JSON.parse(
-                await step.do(`${key}-topics`, async () =>
-                  JSON.stringify(await topicsWithoutDigest(env, materialId)),
-                ),
+              const topicIds = await stepJson(`${key}-topics`, () =>
+                topicsWithoutDigest(env, materialId),
               );
               // One Topic after another, so a Processing stays one Workflow instance.
               for (const topicId of topicIds) {
@@ -257,8 +258,8 @@ export class MaterialProcessing extends WorkflowEntrypoint<Env, Params> {
           },
         },
         awaited: (context) => awaitedEvent(context as MaterialProcessingContext),
-        confirm: async (received) => {
-          const { sourceId } = received as { sourceId?: string };
+        confirm: async (c) => {
+          const sourceId = mp(c).awaiting[0];
           return sourceId ? confirmSourceDone(env, sourceId) : null;
         },
         waitForLearner: async (c, key) => {
@@ -283,11 +284,10 @@ export class MaterialProcessing extends WorkflowEntrypoint<Env, Params> {
               // Nobody pressed «Повторить» for a year: keep waiting.
             }
           }
-          return JSON.parse(
-            await step.do(`${key}-retry`, async () =>
-              JSON.stringify({ type: "RETRY", sourceIds: await sourcesToRetry(env, materialId) }),
-            ),
-          );
+          return stepJson(`${key}-retry`, async () => ({
+            type: "RETRY",
+            sourceIds: await sourcesToRetry(env, materialId),
+          }));
         },
         save: (from, to, eventType) =>
           saveMaterialFlow(env, {

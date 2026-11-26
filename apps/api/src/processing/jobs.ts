@@ -40,7 +40,7 @@ type SourceRow = typeof source.$inferSelect;
 
 const persisted = (row: JobRow): PersistedFlow<SourceExtractionContext> => ({
   value: row.state,
-  context: { attempts: row.attempts },
+  context: { attempts: row.attempts, attemptsBase: row.attemptsBase },
   // «Ошибка» is not final: it waits for «Повторить».
   status: row.state === "extracted" ? "done" : "active",
 });
@@ -88,7 +88,7 @@ export async function enqueueExtraction(
           .update(job)
           .set({
             state: to.value,
-            attempts: to.context.attempts,
+            attemptsBase: to.context.attemptsBase,
             leaseExpiresAt: null,
             machineVersion: SOURCE_EXTRACTION_VERSION,
           })

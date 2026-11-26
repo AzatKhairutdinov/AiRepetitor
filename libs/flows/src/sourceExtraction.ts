@@ -7,7 +7,10 @@ export const SOURCE_EXTRACTION_VERSION = 2;
 export const MAX_ATTEMPTS = 3;
 
 export interface SourceExtractionContext {
+  /** Leases so far, never reset, so a late `complete` from an old attempt stays recognisable. */
   attempts: number;
+  /** `attempts` when «Повторить» last sent the Source back; leases count from here. */
+  attemptsBase: number;
 }
 
 export type SourceExtractionEvent =
@@ -23,15 +26,15 @@ export const sourceExtraction = setup({
   types: {} as { context: SourceExtractionContext; events: SourceExtractionEvent },
   actions: {
     countAttempt: assign(({ context }) => ({ attempts: context.attempts + 1 })),
-    resetAttempts: assign({ attempts: 0 }),
+    freshAttempts: assign(({ context }) => ({ attemptsBase: context.attempts })),
   },
   guards: {
-    attemptsLeft: ({ context }) => context.attempts < MAX_ATTEMPTS,
+    attemptsLeft: ({ context }) => context.attempts - context.attemptsBase < MAX_ATTEMPTS,
   },
 }).createMachine({
   id: "sourceExtraction",
   initial: "queued",
-  context: { attempts: 0 },
+  context: { attempts: 0, attemptsBase: 0 },
   states: {
     queued: {
       meta: { owner: "system", title: "В очереди" } satisfies StateMeta,
@@ -44,7 +47,7 @@ export const sourceExtraction = setup({
         FAIL: "failed",
         LEASE_EXPIRED: [
           { guard: "attemptsLeft", target: "queued", description: "аренда истекла" },
-          { target: "failed", description: "аренда истекла 3 раза" },
+          { target: "failed", description: `аренда истекла ${MAX_ATTEMPTS} раза` },
         ],
       },
     },
@@ -57,7 +60,7 @@ export const sourceExtraction = setup({
       tags: [WAITS_FOR_LEARNER],
       meta: { owner: "worker", title: "Ошибка, кнопка «Повторить»" } satisfies StateMeta,
       on: {
-        RETRY: { target: "queued", actions: "resetAttempts", description: "«Повторить»" },
+        RETRY: { target: "queued", actions: "freshAttempts", description: "«Повторить»" },
       },
     },
   },

@@ -1,5 +1,6 @@
 /** Who carries out a step: shown on the Team diagrams by node colour. */
-export type Owner = "tutor" | "methodologist" | "worker" | "code" | "system";
+/** `learner` owns no state; it marks the Learner's «Повторить» in the transition log. */
+export type Owner = "tutor" | "methodologist" | "worker" | "code" | "system" | "learner";
 
 /** Every state of every machine carries this in `meta`. */
 export interface StateMeta {

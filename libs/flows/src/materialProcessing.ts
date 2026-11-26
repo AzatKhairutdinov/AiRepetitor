@@ -41,8 +41,24 @@ export type MaterialProcessingEvent =
   | { type: "TOPICS_COMMITTED"; count: number }
   | { type: "DIGESTS_DONE" }
   | { type: "MODEL_FAILED" }
-  /** «Повторить»: re-extract these failed Sources, or (none) continue from the failed step. */
-  | { type: "RETRY"; sourceIds: string[] };
+  /**
+   * «Повторить». With `sourceIds`: re-extract these failed Sources, or (none) go on from the
+   * failed step. Without: the Learner's «Повторить» on the Material, see `sourcesToReextract`.
+   */
+  | { type: "RETRY"; sourceIds?: string[] };
+
+/**
+ * Failed Sources a RETRY extracts again. Once the Topics are committed, a new Source text could
+ * not change them, so none is. «Повторить» on the Material re-extracts only when none was read.
+ */
+function sourcesToReextract(
+  context: MaterialProcessingContext,
+  sourceIds: string[] | undefined,
+): string[] {
+  if (context.failedAt === "digests") return [];
+  if (sourceIds) return sourceIds.filter((id) => context.failed.includes(id));
+  return context.failure === "noSourceRead" ? context.failed : [];
+}
 
 /** «Обработка материала». Decides only; the Workflow runs each named action as a durable step. */
 export const materialProcessing = setup({
@@ -88,10 +104,10 @@ export const materialProcessing = setup({
     })),
     retrySources: assign(({ context, event }) => {
       if (event.type !== "RETRY") return {};
-      const again = event.sourceIds.filter((id) => context.failed.includes(id));
+      const reextract = sourcesToReextract(context, event.sourceIds);
       return {
-        awaiting: again,
-        failed: context.failed.filter((id) => !again.includes(id)),
+        awaiting: reextract,
+        failed: context.failed.filter((id) => !reextract.includes(id)),
         failure: null,
         failedAt: null,
       };
@@ -105,7 +121,7 @@ export const materialProcessing = setup({
     splitPassed: ({ event }) => event.type === "TOPICS_REVIEWED" && event.passed,
     roundsLeft: ({ context }) => context.topicRounds < context.revisionRounds,
     retriesSources: ({ context, event }) =>
-      event.type === "RETRY" && event.sourceIds.some((id) => context.failed.includes(id)),
+      event.type === "RETRY" && sourcesToReextract(context, event.sourceIds).length > 0,
     failedAt: ({ context }, params: { at: RetryPoint }) => context.failedAt === params.at,
   },
 }).createMachine({

@@ -50,6 +50,13 @@
       "when": 1795694536090,
       "tag": "0006_open_demogoblin",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1795699604714,
+      "tag": "0007_sharp_big_bertha",
+      "breakpoints": true
     }
   ]
 }
