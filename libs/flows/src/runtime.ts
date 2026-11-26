@@ -8,7 +8,7 @@ import {
   initialTransition,
   transition,
 } from "xstate";
-import type { StateMeta } from "./meta.ts";
+import { type StateMeta, WAITS_FOR_LEARNER } from "./meta.ts";
 
 /** JSON-safe snapshot as stored in D1. */
 export interface PersistedFlow<TContext = unknown> {
@@ -76,3 +76,9 @@ export function stateMeta(machine: AnyStateMachine, value: string): StateMeta {
 }
 
 export const isFinal = (persisted: PersistedFlow) => persisted.status === "done";
+
+/** The flow stops here: a final state, or one that waits for the Learner. */
+export function stopsHere(machine: AnyStateMachine, persisted: PersistedFlow): boolean {
+  if (isFinal(persisted)) return true;
+  return machine.root.states[persisted.value]?.tags.includes(WAITS_FOR_LEARNER) ?? false;
+}

@@ -7,3 +7,6 @@ export interface StateMeta {
   /** Russian label for the diagram. */
   title: string;
 }
+
+/** Tag of a non-final state where a Processing stops until the Learner acts (e.g. «Повторить»). */
+export const WAITS_FOR_LEARNER = "waitsForLearner";

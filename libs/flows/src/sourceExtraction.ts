@@ -1,7 +1,10 @@
 import { assign, setup } from "xstate";
 import type { StateMeta } from "./meta.ts";
 
-export const SOURCE_EXTRACTION_VERSION = 1;
+export const SOURCE_EXTRACTION_VERSION = 2;
+
+/** A Source gets this many leases; one more expiry fails it. */
+export const MAX_ATTEMPTS = 3;
 
 export interface SourceExtractionContext {
   attempts: number;
@@ -19,6 +22,9 @@ export const sourceExtraction = setup({
   actions: {
     countAttempt: assign(({ context }) => ({ attempts: context.attempts + 1 })),
   },
+  guards: {
+    attemptsLeft: ({ context }) => context.attempts < MAX_ATTEMPTS,
+  },
 }).createMachine({
   id: "sourceExtraction",
   initial: "queued",
@@ -33,7 +39,10 @@ export const sourceExtraction = setup({
       on: {
         SUCCEED: "extracted",
         FAIL: "failed",
-        LEASE_EXPIRED: { target: "queued", description: "аренда истекла" },
+        LEASE_EXPIRED: [
+          { guard: "attemptsLeft", target: "queued", description: "аренда истекла" },
+          { target: "failed", description: "аренда истекла 3 раза" },
+        ],
       },
     },
     extracted: {
