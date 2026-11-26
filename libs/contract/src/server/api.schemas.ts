@@ -8,6 +8,22 @@ export interface BadRequestError {
   message: string;
 }
 
+export type SourceKind = typeof SourceKind[keyof typeof SourceKind];
+
+
+export const SourceKind = {
+  pdf: 'pdf',
+  image: 'image',
+  document: 'document',
+  audio: 'audio',
+  video: 'video',
+} as const;
+
+export interface ClaimJobRequest {
+  /** Source kinds this worker can extract; a worker without a model key leaves out images and media. */
+  kinds: SourceKind[];
+}
+
 export type JobOutcome = typeof JobOutcome[keyof typeof JobOutcome];
 
 
@@ -84,17 +100,6 @@ export const MaterialStatus = {
   topicsReady: 'topicsReady',
   noTopics: 'noTopics',
   failed: 'failed',
-} as const;
-
-export type SourceKind = typeof SourceKind[keyof typeof SourceKind];
-
-
-export const SourceKind = {
-  pdf: 'pdf',
-  image: 'image',
-  document: 'document',
-  audio: 'audio',
-  video: 'video',
 } as const;
 
 /**

@@ -8,7 +8,7 @@ rumdl = "0.3.5"
 typos = "1.52.2"
 lychee = "0.24.2"
 actionlint = "1.7.12"
-rust = { version = "1.100.0", os = ["macos"] }
+rust = { version = "1.100.0", components = "rustfmt,clippy" }
 # agnix: no Intel-macOS build, so compile on macOS; use the prebuilt binary on Linux/CI (saves ~5 min cold).
 "cargo:agnix-cli" = { version = "0.61.0", os = ["macos"] }
 "github:agent-sh/agnix" = { version = "0.61.0", os = [
@@ -47,6 +47,9 @@ run = [
   "pnpm exec vitest run --passWithNoTests",
   "bash scripts/gen-check.sh",
   "lychee --config lychee.toml --no-progress '**/*.md'",
+  "cargo fmt --manifest-path apps/worker/Cargo.toml --check",
+  "cargo clippy --manifest-path apps/worker/Cargo.toml --all-targets --locked -- -D warnings",
+  "cargo test --manifest-path apps/worker/Cargo.toml --locked",
 ]
 
 [tasks.fix]
@@ -71,6 +74,14 @@ run = "bash scripts/dev-setup.sh"
 description = "Run the API (:8787) and web app (:5173) with hot reload"
 depends = ["dev:setup"]
 run = "pnpm nx run-many -t dev --parallel=2"
+
+[tasks.worker]
+description = "Run the extraction worker against the local API"
+run = "bash apps/worker/scripts/dev.sh"
+
+[tasks."worker:install"]
+description = "Install the worker as a launchd agent (macOS)"
+run = "bash apps/worker/scripts/install-launchd.sh"
 
 [tasks."db:generate"]
 description = "Generate a SQL migration from apps/api/src/db/schema.ts"

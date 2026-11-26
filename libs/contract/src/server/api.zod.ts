@@ -158,6 +158,10 @@ export const WorkerClaimJobHeader = zod.object({
   "x-worker-protocol": zod.string()
 })
 
+export const WorkerClaimJobBody = zod.object({
+  "kinds": zod.array(zod.enum(['pdf', 'image', 'document', 'audio', 'video'])).describe('Source kinds this worker can extract; a worker without a model key leaves out images and media.')
+})
+
 export const WorkerClaimJobResponse = zod.object({
   "jobId": zod.string(),
   "sourceId": zod.string(),

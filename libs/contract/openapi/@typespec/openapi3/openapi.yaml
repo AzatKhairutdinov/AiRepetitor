@@ -261,6 +261,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UpgradeRequiredError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClaimJobRequest'
   /worker/jobs/{jobId}/complete:
     post:
       operationId: Worker_completeJob
@@ -324,6 +330,16 @@ components:
       properties:
         message:
           type: string
+    ClaimJobRequest:
+      type: object
+      required:
+        - kinds
+      properties:
+        kinds:
+          type: array
+          items:
+            $ref: '#/components/schemas/SourceKind'
+          description: Source kinds this worker can extract; a worker without a model key leaves out images and media.
     CompleteJobRequest:
       type: object
       required:

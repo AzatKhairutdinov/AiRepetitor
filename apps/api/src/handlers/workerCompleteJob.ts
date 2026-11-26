@@ -13,15 +13,12 @@ import {
 } from "../../../../libs/contract/src/server/api.zod.ts";
 
 import { completeJob } from "../processing/jobs.ts";
-import { rejectWorker } from "../processing/workerAuth.ts";
 
 const factory = createFactory();
 export const workerCompleteJobHandlers = factory.createHandlers(
   zValidator("param", WorkerCompleteJobParams),
   zValidator("json", WorkerCompleteJobBody),
   async (c: WorkerCompleteJobContext) => {
-    const rejected = rejectWorker(c);
-    if (rejected) return rejected;
     const result = await completeJob(c.env, c.req.valid("param").jobId, c.req.valid("json"));
     if (result === "ok") return c.body(null, 204);
     if (result === "notFound") return c.json({ message: "Job not found" }, 404);
