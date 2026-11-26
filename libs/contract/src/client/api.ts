@@ -5,9 +5,36 @@
  * OpenAPI spec version: 0.0.0
  */
 import type {
-  Health
+  ConflictError,
+  CreateProfileRequest,
+  Health,
+  LanguageList,
+  NotFoundError,
+  Profile,
+  ProfileList,
+  UnauthorizedError
 } from './api.schemas.ts';
 
+
+const getHeaders = (...sources: (RequestInit['headers'] | Record<string, string | number | boolean | bigint | readonly string[] | undefined>)[]) => {
+  const seen = new Set<string>();
+  const layers: [string, string | readonly string[]][][] = [];
+  for (const source of sources.reverse()) {
+    if (!source) continue;
+    const entries = source instanceof Headers
+      ? source.entries()
+      : Symbol.iterator in source
+        ? Array.from(source as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string])
+        : Object.entries<string | number | boolean | bigint | readonly string[] | undefined>(source);
+    const layer: [string, string | readonly string[]][] = [];
+    for (const [name, value] of entries) {
+      if (value !== undefined && !seen.has(name.toLowerCase())) layer.push([name, typeof value === 'object' ? value : String(value)]);
+    }
+    for (const [name] of layer) seen.add(name.toLowerCase());
+    layers.push(layer);
+  }
+  return Object.fromEntries(layers.reverse().flat()) as Extract<RequestInit['headers'], Record<string, unknown>>;
+};
 
 export type healthResponse200 = {
   data: Health
@@ -45,6 +72,197 @@ export const health = async ( options?: RequestInit): Promise<healthResponse> =>
 
   const data: healthResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as healthResponse
+}
+
+
+
+export type listLanguagesResponse200 = {
+  data: LanguageList
+  status: 200
+}
+
+export type listLanguagesResponseSuccess = (listLanguagesResponse200) & {
+  headers: Headers;
+};
+;
+
+export type listLanguagesResponse = (listLanguagesResponseSuccess)
+
+export const getListLanguagesUrl = () => {
+
+
+
+
+  return `/languages`
+}
+
+export const listLanguages = async ( options?: RequestInit): Promise<listLanguagesResponse> => {
+
+  const res = await fetch(getListLanguagesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listLanguagesResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as listLanguagesResponse
+}
+
+
+
+export type profilesListProfilesResponse200 = {
+  data: ProfileList
+  status: 200
+}
+
+export type profilesListProfilesResponse401 = {
+  data: UnauthorizedError
+  status: 401
+}
+
+export type profilesListProfilesResponseSuccess = (profilesListProfilesResponse200) & {
+  headers: Headers;
+};
+export type profilesListProfilesResponseError = (profilesListProfilesResponse401) & {
+  headers: Headers;
+};
+
+export type profilesListProfilesResponse = (profilesListProfilesResponseSuccess | profilesListProfilesResponseError)
+
+export const getProfilesListProfilesUrl = () => {
+
+
+
+
+  return `/profiles`
+}
+
+export const profilesListProfiles = async ( options?: RequestInit): Promise<profilesListProfilesResponse> => {
+
+  const res = await fetch(getProfilesListProfilesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: profilesListProfilesResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as profilesListProfilesResponse
+}
+
+
+
+export type profilesCreateProfileResponse201 = {
+  data: Profile
+  status: 201
+}
+
+export type profilesCreateProfileResponse401 = {
+  data: UnauthorizedError
+  status: 401
+}
+
+export type profilesCreateProfileResponse409 = {
+  data: ConflictError
+  status: 409
+}
+
+export type profilesCreateProfileResponseSuccess = (profilesCreateProfileResponse201) & {
+  headers: Headers;
+};
+export type profilesCreateProfileResponseError = (profilesCreateProfileResponse401 | profilesCreateProfileResponse409) & {
+  headers: Headers;
+};
+
+export type profilesCreateProfileResponse = (profilesCreateProfileResponseSuccess | profilesCreateProfileResponseError)
+
+export const getProfilesCreateProfileUrl = () => {
+
+
+
+
+  return `/profiles`
+}
+
+export const profilesCreateProfile = async (createProfileRequest: CreateProfileRequest, options?: RequestInit): Promise<profilesCreateProfileResponse> => {
+
+  const res = await fetch(getProfilesCreateProfileUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
+    body: JSON.stringify(createProfileRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: profilesCreateProfileResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as profilesCreateProfileResponse
+}
+
+
+
+export type profilesGetProfileResponse200 = {
+  data: Profile
+  status: 200
+}
+
+export type profilesGetProfileResponse401 = {
+  data: UnauthorizedError
+  status: 401
+}
+
+export type profilesGetProfileResponse404 = {
+  data: NotFoundError
+  status: 404
+}
+
+export type profilesGetProfileResponseSuccess = (profilesGetProfileResponse200) & {
+  headers: Headers;
+};
+export type profilesGetProfileResponseError = (profilesGetProfileResponse401 | profilesGetProfileResponse404) & {
+  headers: Headers;
+};
+
+export type profilesGetProfileResponse = (profilesGetProfileResponseSuccess | profilesGetProfileResponseError)
+
+export const getProfilesGetProfileUrl = (profileId: string,) => {
+
+
+
+
+  return `/profiles/${profileId}`
+}
+
+export const profilesGetProfile = async (profileId: string, options?: RequestInit): Promise<profilesGetProfileResponse> => {
+
+  const res = await fetch(getProfilesGetProfileUrl(profileId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: profilesGetProfileResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as profilesGetProfileResponse
 }
 
 

@@ -10,3 +10,45 @@ export const HealthResponse = zod.object({
   "status": zod.enum(['ok'])
 })
 
+
+export const ListLanguagesResponse = zod.object({
+  "items": zod.array(zod.object({
+  "code": zod.enum(['en', 'es', 'fr', 'de', 'it', 'pt', 'zh', 'ja', 'ko', 'tr', 'sr']).describe('ISO 639-1 code of a language a Learner can study.'),
+  "name": zod.string().describe('Russian name, also the name of a Profile for this language.')
+}))
+})
+
+
+export const ProfilesListProfilesResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.string(),
+  "language": zod.enum(['en', 'es', 'fr', 'de', 'it', 'pt', 'zh', 'ja', 'ko', 'tr', 'sr']).describe('ISO 639-1 code of a language a Learner can study.'),
+  "name": zod.string().describe('Named after the language, in Russian.'),
+  "createdAt": zod.iso.datetime({"offset":true})
+}).describe('One Learner studying one language.'))
+})
+
+
+export const ProfilesCreateProfileBody = zod.object({
+  "language": zod.enum(['en', 'es', 'fr', 'de', 'it', 'pt', 'zh', 'ja', 'ko', 'tr', 'sr']).describe('ISO 639-1 code of a language a Learner can study.')
+})
+
+export const ProfilesCreateProfileResponse = zod.object({
+  "id": zod.string(),
+  "language": zod.enum(['en', 'es', 'fr', 'de', 'it', 'pt', 'zh', 'ja', 'ko', 'tr', 'sr']).describe('ISO 639-1 code of a language a Learner can study.'),
+  "name": zod.string().describe('Named after the language, in Russian.'),
+  "createdAt": zod.iso.datetime({"offset":true})
+}).describe('One Learner studying one language.')
+
+
+export const ProfilesGetProfileParams = zod.object({
+  "profileId": zod.string()
+})
+
+export const ProfilesGetProfileResponse = zod.object({
+  "id": zod.string(),
+  "language": zod.enum(['en', 'es', 'fr', 'de', 'it', 'pt', 'zh', 'ja', 'ko', 'tr', 'sr']).describe('ISO 639-1 code of a language a Learner can study.'),
+  "name": zod.string().describe('Named after the language, in Russian.'),
+  "createdAt": zod.iso.datetime({"offset":true})
+}).describe('One Learner studying one language.')
+

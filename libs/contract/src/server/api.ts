@@ -10,10 +10,26 @@ import {
 
 
 import { healthHandlers } from '../../../../apps/api/src/handlers/health';
+import { listLanguagesHandlers } from '../../../../apps/api/src/handlers/listLanguages';
+import { profilesListProfilesHandlers } from '../../../../apps/api/src/handlers/profilesListProfiles';
+import { profilesCreateProfileHandlers } from '../../../../apps/api/src/handlers/profilesCreateProfile';
+import { profilesGetProfileHandlers } from '../../../../apps/api/src/handlers/profilesGetProfile';
 
 const app = new Hono()
 
   .get('/health', ...healthHandlers)
+
+
+  .get('/languages', ...listLanguagesHandlers)
+
+
+  .get('/profiles', ...profilesListProfilesHandlers)
+
+
+  .post('/profiles', ...profilesCreateProfileHandlers)
+
+
+  .get('/profiles/:profileId', ...profilesGetProfileHandlers)
 
 ;
 
