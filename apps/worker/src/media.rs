@@ -16,6 +16,8 @@ const HTTP_INPUT: [&str; 6] = [
     "-reconnect_delay_max",
     "30",
 ];
+/// A read that stalls this long (microseconds) fails instead of holding the job until its lease ends.
+const READ_TIMEOUT: [&str; 2] = ["-rw_timeout", "120000000"];
 
 /// True when both ffmpeg and ffprobe run.
 pub async fn tools_available() -> bool {
@@ -42,6 +44,7 @@ pub async fn probe(url: &str) -> Result<Probe, String> {
     let out = Command::new("ffprobe")
         .args(["-v", "error", "-print_format", "json"])
         .args(["-show_entries", "format=duration:stream=codec_type"])
+        .args(READ_TIMEOUT)
         .arg(url)
         .output()
         .await
@@ -71,6 +74,7 @@ pub async fn extract_audio(url: &str, dir: &Path) -> Result<PathBuf, String> {
         Command::new("ffmpeg")
             .args(["-nostdin", "-v", "error", "-y"])
             .args(HTTP_INPUT)
+            .args(READ_TIMEOUT)
             .arg("-i")
             .arg(url)
             .args(["-vn", "-ac", "1", "-ar", "16000"])

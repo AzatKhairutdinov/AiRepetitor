@@ -66,7 +66,12 @@ fn is_zero(n: &u64) -> bool {
 }
 
 #[derive(Debug, Serialize, PartialEq)]
-#[serde(rename_all = "camelCase", tag = "outcome")]
+// `rename_all` names the variants; `rename_all_fields` gives the API `audioSaved`.
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "outcome"
+)]
 pub enum Outcome {
     #[serde(rename = "success")]
     Success {

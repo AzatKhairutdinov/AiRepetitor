@@ -53,17 +53,22 @@ impl Fake {
         let state = Arc::new(Mutex::new(State::default()));
         let shared = Arc::clone(&state);
         thread::spawn(move || {
+            // One thread per request: ffprobe opens a ranged connection while the first is open.
             for mut req in server.incoming_requests() {
-                let mut body = Vec::new();
-                let _ = req.as_reader().read_to_end(&mut body);
-                let (code, out, headers) = handle(&shared, provider, &mut req, body);
-                let mut res = tiny_http::Response::from_data(out).with_status_code(code);
-                for (name, value) in headers {
-                    res = res.with_header(
-                        tiny_http::Header::from_bytes(name.as_bytes(), value.as_bytes()).unwrap(),
-                    );
-                }
-                let _ = req.respond(res);
+                let shared = Arc::clone(&shared);
+                thread::spawn(move || {
+                    let mut body = Vec::new();
+                    let _ = req.as_reader().read_to_end(&mut body);
+                    let (code, out, headers) = handle(&shared, provider, &mut req, body);
+                    let mut res = tiny_http::Response::from_data(out).with_status_code(code);
+                    for (name, value) in headers {
+                        res = res.with_header(
+                            tiny_http::Header::from_bytes(name.as_bytes(), value.as_bytes())
+                                .unwrap(),
+                        );
+                    }
+                    let _ = req.respond(res);
+                });
             }
         });
         Self { base, state }
