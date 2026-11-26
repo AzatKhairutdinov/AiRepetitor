@@ -7,7 +7,8 @@
 import type { Context, Env } from 'hono';
 
 import type {
-CompleteJobRequest,
+ClaimJobRequest,
+  CompleteJobRequest,
   CreateMaterialRequest,
   CreateProfileRequest
 } from './api.schemas.ts';
@@ -41,7 +42,7 @@ export type ProfileMaterialsCreateMaterialContext<E extends Env = any> = Context
  },json: CreateMaterialRequest, }, out: { param: {
  profileId: string,
  },json: CreateMaterialRequest, } }>
-export type WorkerClaimJobContext<E extends Env = any> = Context<E, '/worker/claim'>
+export type WorkerClaimJobContext<E extends Env = any> = Context<E, '/worker/claim', { in: { json: ClaimJobRequest, }, out: { json: ClaimJobRequest, } }>
 export type WorkerCompleteJobContext<E extends Env = any> = Context<E, '/worker/jobs/:jobId/complete', { in: { param: {
  jobId: string,
  },json: CompleteJobRequest, }, out: { param: {

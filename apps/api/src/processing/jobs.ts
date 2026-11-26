@@ -10,7 +10,7 @@ import {
   sourceExtraction,
 } from "@airepetitor/flows";
 import { isMedia } from "@airepetitor/formats";
-import { and, asc, eq, lt, or } from "drizzle-orm";
+import { and, asc, eq, inArray, lt, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import type {
   CompleteJobRequest,
@@ -24,7 +24,7 @@ import { transitionRow } from "./flowStore.ts";
 import { instanceId } from "./queue.ts";
 
 /** Bump on any breaking change of the claim/complete protocol. */
-export const WORKER_PROTOCOL = "1";
+export const WORKER_PROTOCOL = "2";
 
 const LEASE_PER_MEDIA_HOUR_MS = 30 * 60 * 1000;
 const MIN_LEASE_MS = 30 * 60 * 1000;
@@ -83,22 +83,26 @@ export async function enqueueExtraction(env: Env, materialId: string): Promise<v
 export async function claimJob(
   env: Env,
   storage: Storage,
+  kinds: SourceKind[],
   now = new Date(),
 ): Promise<WorkerJob | null> {
+  if (kinds.length === 0) return null;
   const d = drizzle(env.DB);
-  const available = or(
-    eq(job.state, "queued"),
-    and(eq(job.state, "leased"), lt(job.leaseExpiresAt, now)),
+  const available = and(
+    inArray(source.kind, kinds),
+    or(eq(job.state, "queued"), and(eq(job.state, "leased"), lt(job.leaseExpiresAt, now))),
   );
 
   // A few tries in case another worker takes the same job between select and update.
   for (let i = 0; i < 3; i++) {
-    const [candidate] = await d
-      .select()
+    const [found] = await d
+      .select({ job })
       .from(job)
+      .innerJoin(source, eq(source.id, job.id))
       .where(available)
       .orderBy(asc(job.createdAt))
       .limit(1);
+    const candidate = found?.job;
     if (!candidate) return null;
     const [src] = await d.select().from(source).where(eq(source.id, candidate.id));
     if (!src) return null;

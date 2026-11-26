@@ -6,6 +6,7 @@
  */
 import type {
   BadRequestError,
+  ClaimJobRequest,
   CompleteJobRequest,
   ConflictError,
   CreateMaterialRequest,
@@ -540,14 +541,14 @@ export const getWorkerClaimJobUrl = () => {
 /**
  * Leases the next job; 204 when there is none.
  */
-export const workerClaimJob = async ( options?: RequestInit): Promise<workerClaimJobResponse> => {
+export const workerClaimJob = async (claimJobRequest: ClaimJobRequest, options?: RequestInit): Promise<workerClaimJobResponse> => {
 
   const res = await fetch(getWorkerClaimJobUrl(),
   {
     ...options,
-    method: 'POST'
-
-
+    method: 'POST',
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
+    body: JSON.stringify(claimJobRequest)
   }
 )
 

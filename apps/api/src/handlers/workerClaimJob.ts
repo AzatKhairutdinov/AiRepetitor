@@ -7,19 +7,21 @@
 import { createFactory } from "hono/factory";
 import { zValidator } from "../../../../libs/contract/src/server/api.validator.ts";
 import type { WorkerClaimJobContext } from "../../../../libs/contract/src/server/api.context.ts";
-import { WorkerClaimJobResponse } from "../../../../libs/contract/src/server/api.zod.ts";
+import {
+  WorkerClaimJobBody,
+  WorkerClaimJobResponse,
+} from "../../../../libs/contract/src/server/api.zod.ts";
 
 import { claimJob } from "../processing/jobs.ts";
-import { rejectWorker } from "../processing/workerAuth.ts";
 import { storageFor } from "../storage.ts";
 
 const factory = createFactory();
 export const workerClaimJobHandlers = factory.createHandlers(
   zValidator("response", WorkerClaimJobResponse),
+  zValidator("json", WorkerClaimJobBody),
   async (c: WorkerClaimJobContext) => {
-    const rejected = rejectWorker(c);
-    if (rejected) return rejected;
-    const found = await claimJob(c.env, storageFor(c.env, new URL(c.req.url).origin));
+    const storage = storageFor(c.env, new URL(c.req.url).origin);
+    const found = await claimJob(c.env, storage, c.req.valid("json").kinds);
     if (!found) return c.body(null, 204);
     return c.json(found, 200);
   },

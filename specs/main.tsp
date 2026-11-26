@@ -260,6 +260,11 @@ model WorkerJob {
   writeAudio?: WriteLink;
 }
 
+model ClaimJobRequest {
+  /** Source kinds this worker can extract; a worker without a model key leaves out images and media. */
+  kinds: SourceKind[];
+}
+
 union JobOutcome {
   "success",
   "failure",
@@ -287,7 +292,7 @@ interface Worker {
   /** Leases the next job; 204 when there is none. */
   @route("/claim")
   @post
-  claimJob(@header("x-worker-protocol") protocol: string):
+  claimJob(@header("x-worker-protocol") protocol: string, @body body: ClaimJobRequest):
     | WorkerJob
     | NoContentResponse
     | UnauthorizedError
